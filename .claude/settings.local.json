@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir in api/app api/app/models api/app/schemas api/app/routers api/app/services api/app/tasks api/app/utils api/tests)",
+      "Bash(do touch \"$dir/__init__.py\")",
+      "Bash(done)",
+      "Bash(for dir in docs design/figma-exports design/assets api/alembic/versions dashboard/public/assets dashboard/tests infra/scripts)",
+      "Bash(do touch \"$dir/.gitkeep\")"
+    ]
+  }
+}
