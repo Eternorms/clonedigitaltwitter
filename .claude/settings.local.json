@@ -5,7 +5,25 @@
       "Bash(do touch \"$dir/__init__.py\")",
       "Bash(done)",
       "Bash(for dir in docs design/figma-exports design/assets api/alembic/versions dashboard/public/assets dashboard/tests infra/scripts)",
-      "Bash(do touch \"$dir/.gitkeep\")"
+      "Bash(do touch \"$dir/.gitkeep\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial project setup \\(Phase 0\\)\n\n- Project folder structure \\(api, dashboard, infra, docs, design\\)\n- Docker Compose with PostgreSQL 15, Redis 7, and Adminer\n- FastAPI backend skeleton with requirements.txt and Dockerfile\n- Next.js 14 dashboard skeleton with package.json and Dockerfile\n- Environment variables template \\(.env.example\\)\n- Nginx reverse proxy config\n- Project context documentation \\(CONTEXT.md\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(dir /s \"d:\\\\CLoneDigitalTwitter\")",
+      "Bash(ls:*)",
+      "Bash(dir /s /b \"d:\\\\CLoneDigitalTwitter\\\\dashboard\")",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npx next build)",
+      "Bash(npm run dev)",
+      "Bash(npm run build:*)",
+      "Bash(powershell:*)",
+      "Bash(curl:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git rebase:*)",
+      "Bash(GIT_EDITOR=true git rebase:*)",
+      "Bash(GIT_EDITOR=\"echo\" git rebase:*)"
     ]
   }
 }
