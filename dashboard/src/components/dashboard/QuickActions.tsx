@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Plus, Rss, Sparkles, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -43,7 +42,7 @@ export function QuickActions() {
         {actions.map((action) => {
           const Icon = action.icon;
           return (
-            <Link
+            <a
               key={action.label}
               href={action.href}
               className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-all group"
@@ -55,7 +54,7 @@ export function QuickActions() {
                 <p className="text-sm font-bold text-slate-900">{action.label}</p>
                 <p className="text-xs text-slate-500">{action.description}</p>
               </div>
-            </Link>
+            </a>
           );
         })}
       </div>

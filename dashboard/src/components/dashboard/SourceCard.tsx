@@ -36,10 +36,10 @@ export function SourceCard({ source }: SourceCardProps) {
 
       <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
         <span className="font-medium">
-          {source.articleCount} artigos
+          {source.article_count} artigos
         </span>
         <span>
-          Sync: {formatRelativeTime(source.lastSync)}
+          Sync: {source.last_sync_at ? formatRelativeTime(source.last_sync_at) : 'Nunca'}
         </span>
       </div>
 

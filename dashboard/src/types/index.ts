@@ -1,6 +1,6 @@
 export type PostStatus = 'pending' | 'approved' | 'rejected' | 'scheduled' | 'published';
 
-export type PostSource = 'claude-ai' | 'rss' | 'manual' | 'template';
+export type PostSource = 'claude_ai' | 'rss' | 'manual' | 'template';
 
 export interface PostAuthor {
   name: string;
@@ -12,16 +12,21 @@ export interface PostAuthor {
 
 export interface Post {
   id: string;
+  persona_id: string;
   content: string;
   status: PostStatus;
   source: PostSource;
-  sourceName: string;
+  source_name: string | null;
   author: PostAuthor;
-  createdAt: string;
-  scheduledAt?: string;
-  publishedAt?: string;
-  hasImage?: boolean;
-  hashtags?: string[];
+  created_at: string;
+  scheduled_at?: string | null;
+  published_at?: string | null;
+  image_url?: string | null;
+  hashtags: string[];
+  impressions: number;
+  engagements: number;
+  likes: number;
+  retweets: number;
 }
 
 export interface QueueStats {
@@ -41,6 +46,7 @@ export interface Persona {
 export interface User {
   id: string;
   name: string;
+  email: string;
   initials: string;
   plan: string;
 }
@@ -69,13 +75,14 @@ export type SourceStatus = 'active' | 'paused' | 'error';
 
 export interface RSSSource {
   id: string;
+  persona_id: string;
   name: string;
   url: string;
-  category: string;
+  category: string | null;
   status: SourceStatus;
-  lastSync: string;
-  articleCount: number;
-  icon: string;
+  last_sync_at: string | null;
+  article_count: number;
+  icon: string | null;
 }
 
 // ========== Analytics ==========
@@ -94,7 +101,7 @@ export interface TopPost {
   engagements: number;
   likes: number;
   retweets: number;
-  publishedAt: string;
+  published_at: string | null;
 }
 
 // ========== Dashboard ==========
@@ -105,7 +112,7 @@ export interface Activity {
   id: string;
   type: ActivityType;
   description: string;
-  timestamp: string;
+  created_at: string;
 }
 
 // ========== Settings ==========

@@ -1,10 +1,11 @@
 import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SourceCard } from '@/components/dashboard/SourceCard';
-import { rssSources } from '@/lib/mock-data';
+import { getRssSources } from '@/lib/supabase/queries';
 
-export default function SourcesPage() {
-  const activeSources = rssSources.filter((s) => s.status === 'active').length;
+export default async function SourcesPage() {
+  const sources = await getRssSources();
+  const activeSources = sources.filter((s) => s.status === 'active').length;
 
   return (
     <>
@@ -14,7 +15,7 @@ export default function SourcesPage() {
             Fontes (RSS)
           </h1>
           <p className="text-slate-500 mt-2 text-lg font-medium">
-            {rssSources.length} fontes configuradas \u00B7 {activeSources} ativas
+            {sources.length} fontes configuradas · {activeSources} ativas
           </p>
         </div>
         <Button variant="primary" size="lg" icon={<Plus className="w-5 h-5" />}>
@@ -22,7 +23,6 @@ export default function SourcesPage() {
         </Button>
       </header>
 
-      {/* Search bar */}
       <div className="relative mb-8">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
@@ -32,9 +32,8 @@ export default function SourcesPage() {
         />
       </div>
 
-      {/* Sources grid */}
       <div className="grid grid-cols-3 gap-6">
-        {rssSources.map((source) => (
+        {sources.map((source) => (
           <SourceCard key={source.id} source={source} />
         ))}
       </div>

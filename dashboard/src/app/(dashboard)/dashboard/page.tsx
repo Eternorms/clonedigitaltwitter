@@ -1,8 +1,11 @@
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { getQueueStats, getActivities } from '@/lib/supabase/queries';
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [stats, activities] = await Promise.all([getQueueStats(), getActivities()]);
+
   return (
     <>
       <header className="mb-10">
@@ -10,15 +13,15 @@ export default function DashboardPage() {
           Dashboard
         </h1>
         <p className="text-slate-500 mt-2 text-lg font-medium">
-          Vis\u00E3o geral da sua opera\u00E7\u00E3o de conte\u00FAdo.
+          Visão geral da sua operação de conteúdo.
         </p>
       </header>
 
-      <DashboardStats />
+      <DashboardStats stats={stats} />
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2">
-          <ActivityFeed />
+          <ActivityFeed activities={activities} />
         </div>
         <div>
           <QuickActions />

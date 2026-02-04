@@ -9,8 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
-import { recentActivities } from '@/lib/mock-data';
-import type { ActivityType } from '@/types';
+import type { Activity, ActivityType } from '@/types';
 
 const activityConfig: Record<
   ActivityType,
@@ -23,14 +22,18 @@ const activityConfig: Record<
   ai_generated: { icon: Sparkles, color: 'bg-purple-50 text-purple-500' },
 };
 
-export function ActivityFeed() {
+interface ActivityFeedProps {
+  activities: Activity[];
+}
+
+export function ActivityFeed({ activities }: ActivityFeedProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-soft">
       <div className="px-6 py-4 border-b border-slate-100">
         <h3 className="text-sm font-bold text-slate-900">Atividade Recente</h3>
       </div>
       <div className="divide-y divide-slate-50">
-        {recentActivities.map((activity) => {
+        {activities.length > 0 ? activities.map((activity) => {
           const config = activityConfig[activity.type];
           const Icon = config.icon;
           return (
@@ -47,11 +50,13 @@ export function ActivityFeed() {
                 </p>
               </div>
               <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
-                {formatRelativeTime(activity.timestamp)}
+                {formatRelativeTime(activity.created_at)}
               </span>
             </div>
           );
-        })}
+        }) : (
+          <div className="px-6 py-8 text-center text-sm text-slate-400">Nenhuma atividade recente</div>
+        )}
       </div>
     </div>
   );

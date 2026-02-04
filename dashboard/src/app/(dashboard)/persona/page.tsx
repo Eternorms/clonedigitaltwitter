@@ -1,9 +1,11 @@
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PersonaCard } from '@/components/persona/PersonaCard';
-import { personasDetail } from '@/lib/mock-data';
+import { getPersonasDetail } from '@/lib/supabase/queries';
 
-export default function PersonaPage() {
+export default async function PersonaPage() {
+  const personas = await getPersonasDetail();
+
   return (
     <>
       <header className="flex items-center justify-between mb-10">
@@ -21,7 +23,7 @@ export default function PersonaPage() {
       </header>
 
       <div className="grid grid-cols-3 gap-6">
-        {personasDetail.map((persona) => (
+        {personas.map((persona) => (
           <PersonaCard key={persona.id} persona={persona} />
         ))}
       </div>

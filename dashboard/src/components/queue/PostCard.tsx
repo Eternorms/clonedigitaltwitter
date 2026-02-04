@@ -5,21 +5,33 @@ import { cn } from '@/lib/utils';
 import { formatRelativeTime, formatScheduledTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
-import type { Post } from '@/types';
+import { approvePost, rejectPost } from '@/lib/supabase/mutations';
+import type { Post, PostStatus } from '@/types';
 
 interface PostCardProps {
   post: Post;
+  onStatusChange?: (id: string, status: PostStatus) => void;
 }
 
 const sourceIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   rss: Rss,
-  'claude-ai': Cpu,
+  'claude_ai': Cpu,
 };
 
-export function PostCard({ post }: PostCardProps) {
+export function PostCard({ post, onStatusChange }: PostCardProps) {
   const isPending = post.status === 'pending';
   const isScheduled = post.status === 'scheduled';
   const SourceIcon = sourceIconMap[post.source] || Rss;
+
+  const handleApprove = async () => {
+    await approvePost(post.id);
+    onStatusChange?.(post.id, 'approved');
+  };
+
+  const handleReject = async () => {
+    await rejectPost(post.id);
+    onStatusChange?.(post.id, 'rejected');
+  };
 
   if (isScheduled) {
     return (
@@ -29,13 +41,13 @@ export function PostCard({ post }: PostCardProps) {
             <div className="flex items-center gap-3">
               <span className="px-3 py-1 rounded-lg bg-white border border-slate-100 text-slate-600 text-xs font-bold flex items-center gap-2">
                 <SourceIcon className="w-3 h-3" />
-                {post.sourceName}
+                {post.source_name ?? post.source}
               </span>
             </div>
-            {post.scheduledAt && (
+            {post.scheduled_at && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
                 <Calendar className="w-3 h-3" />
-                {formatScheduledTime(post.scheduledAt)}
+                {formatScheduledTime(post.scheduled_at)}
               </span>
             )}
           </div>
@@ -77,10 +89,10 @@ export function PostCard({ post }: PostCardProps) {
         <div className="flex items-center gap-3 mb-4">
           <span className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold flex items-center gap-2">
             <SourceIcon className="w-3 h-3" />
-            {post.sourceName}
+            {post.source_name ?? post.source}
           </span>
           <span className="text-slate-400 text-xs font-bold uppercase">
-            {formatRelativeTime(post.createdAt)}
+            {formatRelativeTime(post.created_at)}
           </span>
         </div>
 
@@ -105,7 +117,7 @@ export function PostCard({ post }: PostCardProps) {
             </p>
 
             {/* Image preview */}
-            {post.hasImage && (
+            {post.image_url && (
               <div className="mt-4 h-48 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 gap-2 font-medium">
                 <Image className="w-5 h-5" />
                 Preview da Imagem
@@ -118,7 +130,10 @@ export function PostCard({ post }: PostCardProps) {
       {/* Action buttons */}
       {isPending && (
         <div className="w-64 flex flex-col justify-center gap-3 pl-8 border-l border-slate-100">
-          <button className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-2">
+          <button
+            onClick={handleApprove}
+            className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-2"
+          >
             <Check className="w-4 h-4" />
             Aprovar Post
           </button>
@@ -126,7 +141,10 @@ export function PostCard({ post }: PostCardProps) {
             <Pencil className="w-4 h-4" />
             Editar Texto
           </button>
-          <button className="w-full py-2 text-red-500 font-bold text-xs hover:text-red-700 transition-all">
+          <button
+            onClick={handleReject}
+            className="w-full py-2 text-red-500 font-bold text-xs hover:text-red-700 transition-all"
+          >
             Descartar
           </button>
         </div>

@@ -1,19 +1,23 @@
 import { Heart, Repeat2, Eye } from 'lucide-react';
-import { topPosts } from '@/lib/mock-data';
+import type { TopPost } from '@/types';
 
 function formatNumber(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 }
 
-export function TopPostsTable() {
+interface TopPostsTableProps {
+  posts: TopPost[];
+}
+
+export function TopPostsTable({ posts }: TopPostsTableProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-soft">
       <div className="px-6 py-4 border-b border-slate-100">
         <h3 className="text-sm font-bold text-slate-900">Top Posts</h3>
       </div>
       <div className="divide-y divide-slate-50">
-        {topPosts.map((post, index) => (
+        {posts.map((post, index) => (
           <div key={post.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors">
             <span className="text-lg font-extrabold text-slate-300 w-6 text-center">
               {index + 1}

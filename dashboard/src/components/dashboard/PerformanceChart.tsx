@@ -9,22 +9,26 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { dailyMetrics } from '@/lib/mock-data';
+import type { DailyMetric } from '@/types';
 
-export function PerformanceChart() {
+interface PerformanceChartProps {
+  metrics: DailyMetric[];
+}
+
+export function PerformanceChart({ metrics }: PerformanceChartProps) {
   return (
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-sm font-bold text-slate-900">
-          Impress\u00F5es e Engajamento
+          Impressões e Engajamento
         </h3>
         <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
-          \u00DAltimos 7 dias
+          Últimos 7 dias
         </span>
       </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dailyMetrics}>
+          <AreaChart data={metrics}>
             <defs>
               <linearGradient id="colorImpressions" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.15} />
@@ -62,7 +66,7 @@ export function PerformanceChart() {
             <Area
               type="monotone"
               dataKey="impressions"
-              name="Impress\u00F5es"
+              name="Impressões"
               stroke="#38bdf8"
               strokeWidth={2}
               fillOpacity={1}
