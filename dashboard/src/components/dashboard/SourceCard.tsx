@@ -1,13 +1,17 @@
 'use client';
 
-import { ExternalLink, Pause, Play, RefreshCw } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useState } from 'react';
+import { ExternalLink, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { deleteRSSSource, toggleRSSSource } from '@/lib/supabase/mutations';
+import { useToast } from '@/lib/contexts/ToastContext';
 import type { RSSSource } from '@/types';
 
 interface SourceCardProps {
   source: RSSSource;
+  onRemove?: (id: string) => void;
 }
 
 const statusMap: Record<string, { label: string; variant: 'scheduled' | 'pending' | 'rejected' }> = {
@@ -16,8 +20,41 @@ const statusMap: Record<string, { label: string; variant: 'scheduled' | 'pending
   error: { label: 'Erro', variant: 'rejected' },
 };
 
-export function SourceCard({ source }: SourceCardProps) {
+export function SourceCard({ source, onRemove }: SourceCardProps) {
   const status = statusMap[source.status];
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const { addToast } = useToast();
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await deleteRSSSource(source.id);
+      if (error) throw error;
+      setShowDeleteConfirm(false);
+      onRemove?.(source.id);
+      addToast('Fonte removida com sucesso.', 'success');
+    } catch {
+      addToast('Erro ao remover a fonte.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleToggle = async () => {
+    const newStatus = source.status === 'active' ? 'paused' : 'active';
+    setToggling(true);
+    try {
+      const { error } = await toggleRSSSource(source.id, newStatus);
+      if (error) throw error;
+      addToast(newStatus === 'active' ? 'Fonte ativada.' : 'Fonte pausada.', 'success');
+    } catch {
+      addToast('Erro ao alterar status da fonte.', 'error');
+    } finally {
+      setToggling(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft hover:shadow-hover transition-all group">
@@ -52,7 +89,9 @@ export function SourceCard({ source }: SourceCardProps) {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
-            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors"
+            onClick={handleToggle}
+            disabled={toggling}
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
             aria-label={source.status === 'active' ? 'Pausar' : 'Ativar'}
           >
             {source.status === 'active' ? (
@@ -60,6 +99,13 @@ export function SourceCard({ source }: SourceCardProps) {
             ) : (
               <Play className="w-4 h-4" />
             )}
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+            aria-label="Excluir fonte"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
         <a
@@ -72,6 +118,16 @@ export function SourceCard({ source }: SourceCardProps) {
           Ver feed
         </a>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Excluir Fonte RSS"
+        description={`Tem certeza que deseja excluir "${source.name}"?`}
+        confirmLabel="Excluir"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

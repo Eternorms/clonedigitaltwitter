@@ -1,7 +1,13 @@
-import { Filter, Plus } from 'lucide-react';
+'use client';
+
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-export function QueueHeader() {
+interface QueueHeaderProps {
+  onNewPost: () => void;
+}
+
+export function QueueHeader({ onNewPost }: QueueHeaderProps) {
   return (
     <header className="flex items-center justify-between mb-12">
       <div>
@@ -12,22 +18,14 @@ export function QueueHeader() {
           Gerencie o conteúdo gerado hoje.
         </p>
       </div>
-      <div className="flex gap-4">
-        <Button
-          variant="secondary"
-          size="lg"
-          icon={<Filter className="w-4 h-4" />}
-        >
-          Filtros
-        </Button>
-        <Button
-          variant="primary"
-          size="lg"
-          icon={<Plus className="w-5 h-5" />}
-        >
-          Novo Post
-        </Button>
-      </div>
+      <Button
+        variant="primary"
+        size="lg"
+        icon={<Plus className="w-5 h-5" />}
+        onClick={onNewPost}
+      >
+        Novo Post
+      </Button>
     </header>
   );
 }

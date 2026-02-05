@@ -9,6 +9,7 @@ export interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  loading?: boolean;
   className?: string;
   type?: 'button' | 'submit' | 'reset';
   icon?: ReactNode;

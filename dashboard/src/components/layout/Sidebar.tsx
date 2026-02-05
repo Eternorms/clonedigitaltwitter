@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useState, useRef, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import {
   Command,
@@ -11,6 +12,8 @@ import {
   Settings,
   ChevronsUpDown,
   LogOut,
+  Loader2,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePersona } from '@/lib/contexts/PersonaContext';
@@ -37,7 +40,20 @@ interface SidebarProps {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
-  const { activePersona, personas } = usePersona();
+  const { activePersona, personas, setActivePersona } = usePersona();
+  const [loggingOut, startTransition] = useTransition();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    if (showDropdown) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown]);
 
   return (
     <aside className="w-72 bg-white flex flex-col fixed h-full z-10 border-r border-slate-100">
@@ -53,8 +69,11 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* Persona Selector */}
       {activePersona ? (
-        <div className="px-6 mb-2">
-          <button className="w-full flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-300 hover:bg-white hover:shadow-soft transition-all cursor-pointer group text-left">
+        <div className="px-6 mb-2 relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowDropdown((v) => !v)}
+            className="w-full flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-300 hover:bg-white hover:shadow-soft transition-all cursor-pointer group text-left"
+          >
             <span className="text-2xl w-12 h-12 flex items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm">
               {activePersona.emoji}
             </span>
@@ -64,6 +83,42 @@ export function Sidebar({ user }: SidebarProps) {
             </div>
             <ChevronsUpDown className="w-4 h-4 text-slate-400" />
           </button>
+
+          {showDropdown && (
+            <div className="absolute left-6 right-6 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-hover z-20 py-1 overflow-hidden">
+              {personas.map((persona) => (
+                <button
+                  key={persona.id}
+                  onClick={() => {
+                    setActivePersona(persona);
+                    setShowDropdown(false);
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors',
+                    persona.id === activePersona.id && 'bg-slate-50'
+                  )}
+                >
+                  <span className="text-lg w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100">
+                    {persona.emoji}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{persona.name}</p>
+                    <p className="text-xs text-slate-400 font-medium">{persona.handle}</p>
+                  </div>
+                  {persona.id === activePersona.id && (
+                    <Check className="w-4 h-4 text-slate-900" />
+                  )}
+                </button>
+              ))}
+              <Link
+                href="/persona"
+                onClick={() => setShowDropdown(false)}
+                className="w-full flex items-center justify-center px-4 py-3 text-xs font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 border-t border-slate-100 transition-colors"
+              >
+                Gerenciar Personas
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="px-6 mb-2">
@@ -119,15 +174,14 @@ export function Sidebar({ user }: SidebarProps) {
             <Settings className="w-5 h-5 text-slate-400 hover:text-slate-600 transition-colors" />
           </Link>
         </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="w-full flex items-center gap-2 px-6 py-2 mt-1 text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sair
-          </button>
-        </form>
+        <button
+          onClick={() => startTransition(() => logout())}
+          disabled={loggingOut}
+          className="w-full flex items-center gap-2 px-6 py-2 mt-1 text-xs font-bold text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+        >
+          {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+          {loggingOut ? 'Saindo...' : 'Sair'}
+        </button>
       </div>
     </aside>
   );

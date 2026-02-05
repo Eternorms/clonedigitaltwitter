@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   User,
   Bell,
@@ -14,6 +15,9 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { updateProfile } from '@/lib/supabase/mutations';
+import { useToast } from '@/lib/contexts/ToastContext';
 import type { User as UserType, APIConnection } from '@/types';
 
 const apiConnections: APIConnection[] = [
@@ -26,7 +30,7 @@ const apiConnections: APIConnection[] = [
   },
   {
     id: '2',
-    name: 'Claude AI',
+    name: 'Gemini AI',
     description: 'Geração de conteúdo com IA',
     connected: true,
     icon: 'Bot',
@@ -51,6 +55,41 @@ interface SettingsContentProps {
 }
 
 export function SettingsContent({ user }: SettingsContentProps) {
+  const [name, setName] = useState(user.name);
+  const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { key: 'new_posts', label: 'Novos posts na fila', description: 'Receba alerta quando a IA gerar um novo post', enabled: true },
+    { key: 'published', label: 'Posts publicados', description: 'Confirmação quando um post for publicado', enabled: true },
+    { key: 'errors', label: 'Erros de publicação', description: 'Alerta quando houver falha ao publicar', enabled: true },
+    { key: 'daily_report', label: 'Relatório diário', description: 'Resumo diário de performance por email', enabled: false },
+  ]);
+  const { addToast } = useToast();
+
+  const toggleNotification = (key: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => n.key === key ? { ...n, enabled: !n.enabled } : n)
+    );
+    addToast('Preferência atualizada.', 'success');
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      addToast('O nome não pode estar vazio.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await updateProfile({ name: name.trim() });
+      if (error) throw error;
+      addToast('Perfil atualizado com sucesso!', 'success');
+    } catch {
+      addToast('Erro ao salvar alterações.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <header className="mb-10">
@@ -86,7 +125,8 @@ export function SettingsContent({ user }: SettingsContentProps) {
                 </label>
                 <input
                   type="text"
-                  defaultValue={user.name}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
                 />
               </div>
@@ -97,12 +137,15 @@ export function SettingsContent({ user }: SettingsContentProps) {
                 <input
                   type="email"
                   defaultValue={user.email}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                  disabled
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-400 cursor-not-allowed"
                 />
               </div>
             </div>
             <div className="flex justify-end">
-              <Button variant="primary">Salvar Alterações</Button>
+              <Button variant="primary" onClick={handleSave} loading={saving}>
+                Salvar Alterações
+              </Button>
             </div>
           </div>
         </section>
@@ -152,18 +195,14 @@ export function SettingsContent({ user }: SettingsContentProps) {
             <h2 className="text-sm font-bold text-slate-900">Notificações</h2>
           </div>
           <div className="divide-y divide-slate-50">
-            {[
-              { label: 'Novos posts na fila', description: 'Receba alerta quando a IA gerar um novo post', enabled: true },
-              { label: 'Posts publicados', description: 'Confirmação quando um post for publicado', enabled: true },
-              { label: 'Erros de publicação', description: 'Alerta quando houver falha ao publicar', enabled: true },
-              { label: 'Relatório diário', description: 'Resumo diário de performance por email', enabled: false },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors">
+            {notifications.map((item) => (
+              <div key={item.key} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors">
                 <div>
                   <p className="text-sm font-bold text-slate-900">{item.label}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
                 </div>
                 <button
+                  onClick={() => toggleNotification(item.key)}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative',
                     item.enabled ? 'bg-slate-900' : 'bg-slate-200'
@@ -194,10 +233,25 @@ export function SettingsContent({ user }: SettingsContentProps) {
                 Todos os dados serão removidos permanentemente.
               </p>
             </div>
-            <Button variant="destructive">Excluir Conta</Button>
+            <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
+              Excluir Conta
+            </Button>
           </div>
         </section>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Excluir Conta"
+        description="Todos os seus dados serão removidos permanentemente. Esta ação é irreversível."
+        confirmLabel="Excluir Conta"
+        cancelLabel="Manter Conta"
+        onConfirm={() => {
+          addToast('Funcionalidade em desenvolvimento.', 'info');
+          setShowDeleteConfirm(false);
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </>
   );
 }

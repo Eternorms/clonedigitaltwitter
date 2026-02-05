@@ -51,54 +51,54 @@ serve(async (req) => {
       })
     }
 
-    // Call Claude API
-    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY')
-    if (!claudeApiKey) {
-      return new Response(JSON.stringify({ error: 'Claude API key not configured' }), {
+    // Call Gemini API
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
+    if (!geminiApiKey) {
+      return new Response(JSON.stringify({ error: 'Gemini API key not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
     const topics = (persona.topics as string[]) ?? []
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: `Gere ${count} posts para Twitter para a persona "${persona.name}" (${persona.handle}).
+    const prompt = `Gere ${count} posts para Twitter para a persona "${persona.name}" (${persona.handle}).
 Tom: ${persona.tone ?? 'informativo'}.
 Tópicos da persona: ${topics.join(', ')}.
 Foco no tópico: ${topic ?? topics[0] ?? 'geral'}.
 Idioma: Português-BR.
 Máximo 280 caracteres cada. Inclua hashtags relevantes.
-Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`,
-        }],
-      }),
-    })
+Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
-    if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text()
-      return new Response(JSON.stringify({ error: 'Claude API error', details: errorText }), {
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 1024,
+          },
+        }),
+      },
+    )
+
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text()
+      return new Response(JSON.stringify({ error: 'Gemini API error', details: errorText }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const claudeData = await claudeResponse.json()
-    const responseText = claudeData.content?.[0]?.text ?? '[]'
+    const geminiData = await geminiResponse.json()
+    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
 
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = responseText.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
-      return new Response(JSON.stringify({ error: 'Failed to parse Claude response' }), {
+      return new Response(JSON.stringify({ error: 'Failed to parse Gemini response' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -115,7 +115,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`,
           content: p.content,
           status: 'pending',
           source: 'claude_ai',
-          source_name: 'Claude AI',
+          source_name: 'Gemini AI',
           hashtags: p.hashtags ?? [],
         }))
       )
@@ -133,7 +133,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`,
       user_id: user.id,
       persona_id,
       type: 'ai_generated',
-      description: `Claude gerou ${generatedPosts.length} novos posts`,
+      description: `Gemini gerou ${generatedPosts.length} novos posts`,
     })
 
     return new Response(JSON.stringify({ posts: insertedPosts }), {

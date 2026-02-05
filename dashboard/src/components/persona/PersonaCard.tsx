@@ -5,9 +5,10 @@ import type { PersonaDetail } from '@/types';
 
 interface PersonaCardProps {
   persona: PersonaDetail;
+  onEdit?: (persona: PersonaDetail) => void;
 }
 
-export function PersonaCard({ persona }: PersonaCardProps) {
+export function PersonaCard({ persona, onEdit }: PersonaCardProps) {
   return (
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft hover:shadow-hover transition-all group">
       {/* Header */}
@@ -21,7 +22,10 @@ export function PersonaCard({ persona }: PersonaCardProps) {
             <p className="text-sm text-slate-400 font-medium">{persona.handle}</p>
           </div>
         </div>
-        <button className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors">
+        <button
+          onClick={() => onEdit?.(persona)}
+          className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+        >
           <Settings className="w-5 h-5" />
         </button>
       </div>

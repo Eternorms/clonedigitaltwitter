@@ -83,6 +83,18 @@ export async function toggleRSSSource(sourceId: string, status: 'active' | 'paus
   return supabase.from('rss_sources').update({ status }).eq('id', sourceId)
 }
 
+export async function updatePersona(id: string, data: {
+  name?: string
+  handle?: string
+  emoji?: string
+  description?: string
+  tone?: string
+  topics?: string[]
+}) {
+  const supabase = createClient()
+  return supabase.from('personas').update(data).eq('id', id).select().single()
+}
+
 export async function updateProfile(data: { name?: string }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()

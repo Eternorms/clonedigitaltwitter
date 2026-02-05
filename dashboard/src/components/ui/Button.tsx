@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ButtonProps } from '@/types/components';
 
@@ -25,24 +26,27 @@ export function Button({
   children,
   onClick,
   disabled,
+  loading,
   className,
   type = 'button',
   icon,
 }: ButtonProps) {
+  const isDisabled = disabled || loading;
+
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={isDisabled}
       className={cn(
         'inline-flex items-center justify-center gap-2',
         variantStyles[variant],
         size !== 'md' && sizeStyles[size],
-        disabled && 'opacity-50 cursor-not-allowed',
+        isDisabled && 'opacity-50 cursor-not-allowed',
         className
       )}
     >
-      {icon}
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
       {children}
     </button>
   );

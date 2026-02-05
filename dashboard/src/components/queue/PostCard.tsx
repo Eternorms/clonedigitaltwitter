@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { Rss, Cpu, Image, Check, Pencil, Calendar, CheckCircle2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { formatRelativeTime, formatScheduledTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EditPostModal } from '@/components/queue/EditPostModal';
 import { approvePost, rejectPost } from '@/lib/supabase/mutations';
+import { useToast } from '@/lib/contexts/ToastContext';
 import type { Post, PostStatus } from '@/types';
 
 interface PostCardProps {
@@ -22,15 +26,39 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
   const isPending = post.status === 'pending';
   const isScheduled = post.status === 'scheduled';
   const SourceIcon = sourceIconMap[post.source] || Rss;
+  const [loadingAction, setLoadingAction] = useState<'approve' | 'reject' | null>(null);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentContent, setCurrentContent] = useState(post.content);
+  const { addToast } = useToast();
 
   const handleApprove = async () => {
-    await approvePost(post.id);
-    onStatusChange?.(post.id, 'approved');
+    setLoadingAction('approve');
+    try {
+      const { error } = await approvePost(post.id);
+      if (error) throw error;
+      onStatusChange?.(post.id, 'approved');
+      addToast('Post aprovado com sucesso!', 'success');
+    } catch {
+      addToast('Erro ao aprovar o post. Tente novamente.', 'error');
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   const handleReject = async () => {
-    await rejectPost(post.id);
-    onStatusChange?.(post.id, 'rejected');
+    setLoadingAction('reject');
+    try {
+      const { error } = await rejectPost(post.id);
+      if (error) throw error;
+      setShowRejectConfirm(false);
+      onStatusChange?.(post.id, 'rejected');
+      addToast('Post descartado.', 'info');
+    } catch {
+      addToast('Erro ao descartar o post.', 'error');
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   if (isScheduled) {
@@ -58,7 +86,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
               size="sm"
             />
             <p className="text-base leading-relaxed text-slate-600 font-medium">
-              {renderContent(post.content)}
+              {renderContent(currentContent)}
             </p>
           </div>
         </div>
@@ -72,10 +100,8 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
     );
   }
 
-  // Pending / Primary card
   return (
     <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-soft flex gap-8 relative overflow-hidden group hover:border-slate-300 transition-all">
-      {/* Status badge */}
       {isPending && (
         <div className="absolute top-6 right-6">
           <Badge variant="pending" pulse>
@@ -85,7 +111,6 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
       )}
 
       <div className="flex-1">
-        {/* Source tag + timestamp */}
         <div className="flex items-center gap-3 mb-4">
           <span className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold flex items-center gap-2">
             <SourceIcon className="w-3 h-3" />
@@ -96,7 +121,6 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
           </span>
         </div>
 
-        {/* Author + Content */}
         <div className="flex gap-4">
           <Avatar
             initials={post.author.avatarInitials}
@@ -113,10 +137,9 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
               </span>
             </div>
             <p className="text-lg leading-relaxed text-slate-700 font-medium">
-              {renderContent(post.content)}
+              {renderContent(currentContent)}
             </p>
 
-            {/* Image preview */}
             {post.image_url && (
               <div className="mt-4 h-48 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 gap-2 font-medium">
                 <Image className="w-5 h-5" />
@@ -127,34 +150,58 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
         </div>
       </div>
 
-      {/* Action buttons */}
       {isPending && (
         <div className="w-64 flex flex-col justify-center gap-3 pl-8 border-l border-slate-100">
-          <button
+          <Button
+            variant="primary"
             onClick={handleApprove}
-            className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-2"
+            loading={loadingAction === 'approve'}
+            disabled={loadingAction !== null}
+            icon={<Check className="w-4 h-4" />}
+            className="w-full py-4"
           >
-            <Check className="w-4 h-4" />
             Aprovar Post
-          </button>
-          <button className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+          </Button>
+          <button
+            onClick={() => setShowEditModal(true)}
+            disabled={loadingAction !== null}
+            className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
             <Pencil className="w-4 h-4" />
             Editar Texto
           </button>
-          <button
-            onClick={handleReject}
-            className="w-full py-2 text-red-500 font-bold text-xs hover:text-red-700 transition-all"
+          <Button
+            variant="destructive"
+            onClick={() => setShowRejectConfirm(true)}
+            disabled={loadingAction !== null}
+            className="w-full py-2"
           >
             Descartar
-          </button>
+          </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showRejectConfirm}
+        title="Descartar Post"
+        description="Tem certeza que deseja descartar este post? Esta ação não pode ser desfeita."
+        confirmLabel="Descartar"
+        loading={loadingAction === 'reject'}
+        onConfirm={handleReject}
+        onCancel={() => setShowRejectConfirm(false)}
+      />
+
+      <EditPostModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        post={{ ...post, content: currentContent }}
+        onSave={(_, newContent) => setCurrentContent(newContent)}
+      />
     </div>
   );
 }
 
 function renderContent(content: string) {
-  // Split content to highlight hashtags and mentions
   const parts = content.split(/(#\w+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('#')) {

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
   Send,
@@ -9,6 +11,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
+import { useRealtimeActivities } from '@/lib/supabase/realtime';
+import { createClient } from '@/lib/supabase/client';
 import type { Activity, ActivityType } from '@/types';
 
 const activityConfig: Record<
@@ -26,7 +30,23 @@ interface ActivityFeedProps {
   activities: Activity[];
 }
 
-export function ActivityFeed({ activities }: ActivityFeedProps) {
+export function ActivityFeed({ activities: initialActivities }: ActivityFeedProps) {
+  const [activities, setActivities] = useState(initialActivities);
+  const router = useRouter();
+
+  const refetchActivities = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('activities')
+      .select('id, type, description, created_at')
+      .order('created_at', { ascending: false })
+      .limit(6);
+    if (data) setActivities(data as Activity[]);
+    router.refresh();
+  }, [router]);
+
+  useRealtimeActivities(refetchActivities);
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-soft">
       <div className="px-6 py-4 border-b border-slate-100">
