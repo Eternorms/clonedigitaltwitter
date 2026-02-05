@@ -35,7 +35,33 @@ serve(async (req) => {
       })
     }
 
-    const { persona_id, topic, count = 3 } = await req.json()
+    const { persona_id, topic, count = 3, model: requestedModel } = await req.json()
+
+    // Supported models whitelist
+    const SUPPORTED_MODELS = [
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-pro',
+      'gemini-1.5-flash',
+    ]
+
+    // Determine model: request body > user profile > default
+    let model = 'gemini-2.0-flash'
+
+    if (requestedModel && SUPPORTED_MODELS.includes(requestedModel)) {
+      model = requestedModel
+    } else {
+      // Fetch user's preferred model from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('preferred_model')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.preferred_model && SUPPORTED_MODELS.includes(profile.preferred_model)) {
+        model = profile.preferred_model
+      }
+    }
 
     // Fetch persona for prompt context
     const { data: persona, error: personaError } = await supabase
@@ -70,7 +96,7 @@ Máximo 280 caracteres cada. Inclua hashtags relevantes.
 Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,7 +141,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
           content: p.content,
           status: 'pending',
           source: 'claude_ai',
-          source_name: 'Gemini AI',
+          source_name: `Gemini AI (${model})`,
           hashtags: p.hashtags ?? [],
         }))
       )
@@ -133,7 +159,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
       user_id: user.id,
       persona_id,
       type: 'ai_generated',
-      description: `Gemini gerou ${generatedPosts.length} novos posts`,
+      description: `${model} gerou ${generatedPosts.length} novos posts`,
     })
 
     return new Response(JSON.stringify({ posts: insertedPosts }), {

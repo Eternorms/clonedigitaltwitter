@@ -95,7 +95,7 @@ export async function updatePersona(id: string, data: {
   return supabase.from('personas').update(data).eq('id', id).select().single()
 }
 
-export async function updateProfile(data: { name?: string }) {
+export async function updateProfile(data: { name?: string; preferred_model?: string }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')

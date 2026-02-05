@@ -49,7 +49,24 @@ export interface User {
   email: string;
   initials: string;
   plan: string;
+  preferredModel: string;
 }
+
+// ========== LLM Models ==========
+
+export interface LLMModel {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+}
+
+export const LLM_MODELS: LLMModel[] = [
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Rápido e eficiente para a maioria dos casos', provider: 'Google' },
+  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Ultra-rápido, ideal para alto volume', provider: 'Google' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Maior qualidade e contexto estendido', provider: 'Google' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Equilíbrio entre velocidade e qualidade', provider: 'Google' },
+];
 
 export type NavItemId = 'dashboard' | 'queue' | 'sources' | 'analytics';
 

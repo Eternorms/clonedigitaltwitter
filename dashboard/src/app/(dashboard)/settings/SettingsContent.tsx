@@ -11,6 +11,7 @@ import {
   Send,
   Check,
   ChevronRight,
+  Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +20,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { updateProfile } from '@/lib/supabase/mutations';
 import { useToast } from '@/lib/contexts/ToastContext';
 import type { User as UserType, APIConnection } from '@/types';
+import { LLM_MODELS } from '@/types';
 
 const apiConnections: APIConnection[] = [
   {
@@ -58,6 +60,8 @@ export function SettingsContent({ user }: SettingsContentProps) {
   const [name, setName] = useState(user.name);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(user.preferredModel ?? 'gemini-2.0-flash');
+  const [savingModel, setSavingModel] = useState(false);
   const [notifications, setNotifications] = useState([
     { key: 'new_posts', label: 'Novos posts na fila', description: 'Receba alerta quando a IA gerar um novo post', enabled: true },
     { key: 'published', label: 'Posts publicados', description: 'Confirmação quando um post for publicado', enabled: true },
@@ -87,6 +91,19 @@ export function SettingsContent({ user }: SettingsContentProps) {
       addToast('Erro ao salvar alterações.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveModel = async () => {
+    setSavingModel(true);
+    try {
+      const { error } = await updateProfile({ preferred_model: selectedModel });
+      if (error) throw error;
+      addToast('Modelo de IA atualizado!', 'success');
+    } catch {
+      addToast('Erro ao salvar modelo.', 'error');
+    } finally {
+      setSavingModel(false);
     }
   };
 
@@ -185,6 +202,56 @@ export function SettingsContent({ user }: SettingsContentProps) {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* AI Model Section */}
+        <section className="bg-white rounded-2xl border border-slate-100 shadow-soft">
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100">
+            <Cpu className="w-5 h-5 text-slate-400" />
+            <h2 className="text-sm font-bold text-slate-900">Modelo de IA</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-slate-500">
+              Escolha o modelo usado para gerar posts automaticamente.
+            </p>
+            <div className="space-y-2">
+              {LLM_MODELS.map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => setSelectedModel(model.id)}
+                  className={cn(
+                    'w-full flex items-center gap-4 px-4 py-3 rounded-xl border text-left transition-all',
+                    selectedModel === model.id
+                      ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  <div className={cn(
+                    'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                    selectedModel === model.id ? 'border-slate-900' : 'border-slate-300'
+                  )}>
+                    {selectedModel === model.id && (
+                      <div className="w-2 h-2 rounded-full bg-slate-900" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-slate-900">{model.name}</p>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{model.provider}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{model.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {selectedModel !== user.preferredModel && (
+              <div className="flex justify-end pt-2">
+                <Button variant="primary" onClick={handleSaveModel} loading={savingModel}>
+                  Salvar Modelo
+                </Button>
+              </div>
+            )}
           </div>
         </section>
 

@@ -27,6 +27,7 @@ export async function getCurrentUser(): Promise<User | null> {
     email: user.email ?? '',
     initials,
     plan: profile.plan === 'free' ? 'Free Plan' : 'Pro Plan',
+    preferredModel: (profile as Record<string, unknown>).preferred_model as string ?? 'gemini-2.0-flash',
   }
 }
 
@@ -112,7 +113,7 @@ export async function getPosts(personaId?: string): Promise<Post[]> {
 export async function getQueueStats(personaId?: string): Promise<QueueStats> {
   const supabase = createClient()
 
-  const buildQuery = (status: string) => {
+  const buildQuery = (status: 'pending' | 'approved' | 'rejected' | 'scheduled' | 'published') => {
     let q = supabase.from('posts').select('*', { count: 'exact', head: true })
     if (personaId) q = q.eq('persona_id', personaId)
     return q.eq('status', status)
