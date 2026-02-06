@@ -102,3 +102,67 @@ export async function updateProfile(data: { name?: string; preferred_model?: str
 
   return supabase.from('profiles').update(data).eq('id', user.id)
 }
+
+export async function generateWithAI(personaId: string, topic?: string, count: number = 3, rssSourceId?: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('generate-post', {
+    body: { persona_id: personaId, topic, count, rss_source_id: rssSourceId },
+  })
+  if (error) throw error
+  return data
+}
+
+export async function publishToTwitter(postId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('publish-post', {
+    body: { post_id: postId },
+  })
+  if (error) throw error
+  return data
+}
+
+export async function syncRSSSource(sourceId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('sync-rss', {
+    body: { rss_source_id: sourceId },
+  })
+  if (error) throw error
+  return data
+}
+
+export async function deleteAccount() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Delete user data in order (respecting foreign key constraints)
+  // 1. Delete activities
+  await supabase.from('activities').delete().eq('user_id', user.id)
+
+  // 2. Get all personas for this user
+  const { data: personas } = await supabase
+    .from('personas')
+    .select('id')
+    .eq('user_id', user.id)
+
+  if (personas && personas.length > 0) {
+    const personaIds = personas.map(p => p.id)
+
+    // 3. Delete posts for all personas
+    await supabase.from('posts').delete().in('persona_id', personaIds)
+
+    // 4. Delete RSS sources for all personas
+    await supabase.from('rss_sources').delete().in('persona_id', personaIds)
+
+    // 5. Delete personas
+    await supabase.from('personas').delete().eq('user_id', user.id)
+  }
+
+  // 6. Delete profile
+  await supabase.from('profiles').delete().eq('id', user.id)
+
+  // 7. Sign out (this will also invalidate the session)
+  await supabase.auth.signOut()
+
+  return { success: true }
+}

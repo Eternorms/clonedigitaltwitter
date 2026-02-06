@@ -15,6 +15,8 @@ export default async function AnalyticsPage() {
 
   const totalImpressions = metrics.reduce((sum, m) => sum + m.impressions, 0);
   const totalEngagements = metrics.reduce((sum, m) => sum + m.engagements, 0);
+  const totalLikes = topPosts.reduce((sum, p) => sum + (p.likes ?? 0), 0);
+  const totalRetweets = topPosts.reduce((sum, p) => sum + (p.retweets ?? 0), 0);
 
   return (
     <>
@@ -42,13 +44,13 @@ export default async function AnalyticsPage() {
         />
         <StatCard
           label="Curtidas"
-          value="--"
+          value={formatNumber(totalLikes)}
           color="red"
           icon={<Heart className="w-6 h-6" />}
         />
         <StatCard
           label="Retweets"
-          value="--"
+          value={formatNumber(totalRetweets)}
           color="amber"
           icon={<Repeat2 className="w-6 h-6" />}
           decorative

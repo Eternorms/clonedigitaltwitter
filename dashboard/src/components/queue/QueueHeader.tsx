@@ -1,13 +1,14 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface QueueHeaderProps {
   onNewPost: () => void;
+  onGenerateAI: () => void;
 }
 
-export function QueueHeader({ onNewPost }: QueueHeaderProps) {
+export function QueueHeader({ onNewPost, onGenerateAI }: QueueHeaderProps) {
   return (
     <header className="flex items-center justify-between mb-12">
       <div>
@@ -18,14 +19,24 @@ export function QueueHeader({ onNewPost }: QueueHeaderProps) {
           Gerencie o conteúdo gerado hoje.
         </p>
       </div>
-      <Button
-        variant="primary"
-        size="lg"
-        icon={<Plus className="w-5 h-5" />}
-        onClick={onNewPost}
-      >
-        Novo Post
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button
+          variant="secondary"
+          size="lg"
+          icon={<Sparkles className="w-5 h-5" />}
+          onClick={onGenerateAI}
+        >
+          Gerar com IA
+        </Button>
+        <Button
+          variant="primary"
+          size="lg"
+          icon={<Plus className="w-5 h-5" />}
+          onClick={onNewPost}
+        >
+          Novo Post
+        </Button>
+      </div>
     </header>
   );
 }

@@ -5,7 +5,7 @@ import { ExternalLink, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { deleteRSSSource, toggleRSSSource } from '@/lib/supabase/mutations';
+import { deleteRSSSource, toggleRSSSource, syncRSSSource } from '@/lib/supabase/mutations';
 import { useToast } from '@/lib/contexts/ToastContext';
 import type { RSSSource } from '@/types';
 
@@ -25,6 +25,7 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const { addToast } = useToast();
 
   const handleDelete = async () => {
@@ -56,6 +57,18 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncRSSSource(source.id);
+      addToast(`Fonte sincronizada! ${result?.synced ?? 0} novos artigos.`, 'success');
+    } catch {
+      addToast('Erro ao sincronizar a fonte.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft hover:shadow-hover transition-all group">
       <div className="flex items-start justify-between mb-4">
@@ -83,10 +96,12 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">
         <div className="flex items-center gap-2">
           <button
-            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors"
+            onClick={handleSync}
+            disabled={syncing}
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
             aria-label="Sincronizar"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleToggle}

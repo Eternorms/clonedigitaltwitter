@@ -1,9 +1,72 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
+import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Percent-encode per RFC 3986
+function percentEncode(str: string): string {
+  return encodeURIComponent(str).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+}
+
+// HMAC-SHA1 using Web Crypto API
+async function hmacSha1(key: string, data: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign'],
+  )
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data))
+  return base64Encode(new Uint8Array(signature))
+}
+
+// Generate OAuth 1.0a Authorization header
+async function buildOAuthHeader(
+  method: string,
+  url: string,
+  consumerKey: string,
+  consumerSecret: string,
+  accessToken: string,
+  accessTokenSecret: string,
+): Promise<string> {
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomUUID().replace(/-/g, ''),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_token: accessToken,
+    oauth_version: '1.0',
+  }
+
+  // Sort params and build param string
+  const sortedKeys = Object.keys(oauthParams).sort()
+  const paramString = sortedKeys
+    .map((k) => `${percentEncode(k)}=${percentEncode(oauthParams[k])}`)
+    .join('&')
+
+  // Create signature base string
+  const signatureBase = `${method.toUpperCase()}&${percentEncode(url)}&${percentEncode(paramString)}`
+
+  // Create signing key
+  const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(accessTokenSecret)}`
+
+  // Compute HMAC-SHA1 signature
+  oauthParams.oauth_signature = await hmacSha1(signingKey, signatureBase)
+
+  // Build header string
+  const headerParts = Object.keys(oauthParams)
+    .sort()
+    .map((k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
+    .join(', ')
+
+  return `OAuth ${headerParts}`
 }
 
 serve(async (req) => {
@@ -35,12 +98,18 @@ serve(async (req) => {
       })
     }
 
+    // Rate limiting: 30 tweets per 15 minutes per user
+    const rateLimitResult = checkRateLimit(`publish:${user.id}`, RATE_LIMITS.publishPost)
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult, corsHeaders)
+    }
+
     const { post_id } = await req.json()
 
     // Fetch post with persona
     const { data: post, error: postError } = await supabase
       .from('posts')
-      .select('*, personas(twitter_access_token, twitter_connected, name)')
+      .select('*, personas(name)')
       .eq('id', post_id)
       .single()
 
@@ -51,25 +120,37 @@ serve(async (req) => {
       })
     }
 
-    const persona = post.personas as unknown as {
-      twitter_access_token: string | null
-      twitter_connected: boolean
-      name: string
-    }
+    const persona = post.personas as unknown as { name: string }
 
-    if (!persona?.twitter_connected || !persona?.twitter_access_token) {
-      return new Response(JSON.stringify({ error: 'Twitter not connected for this persona' }), {
-        status: 400,
+    // Read Twitter OAuth 1.0a credentials from env vars
+    const consumerKey = Deno.env.get('TWITTER_API_KEY')
+    const consumerSecret = Deno.env.get('TWITTER_API_KEY_SECRET')
+    const accessToken = Deno.env.get('TWITTER_ACCESS_TOKEN')
+    const accessTokenSecret = Deno.env.get('TWITTER_ACCESS_TOKEN_SECRET')
+
+    if (!consumerKey || !consumerSecret || !accessToken || !accessTokenSecret) {
+      return new Response(JSON.stringify({ error: 'Twitter API credentials not configured' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Publish to Twitter API v2
-    const twitterResponse = await fetch('https://api.twitter.com/2/tweets', {
+    // Publish to Twitter API v2 with OAuth 1.0a
+    const twitterUrl = 'https://api.twitter.com/2/tweets'
+    const oauthHeader = await buildOAuthHeader(
+      'POST',
+      twitterUrl,
+      consumerKey,
+      consumerSecret,
+      accessToken,
+      accessTokenSecret,
+    )
+
+    const twitterResponse = await fetch(twitterUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${persona.twitter_access_token}`,
+        'Authorization': oauthHeader,
       },
       body: JSON.stringify({ text: post.content }),
     })
@@ -107,11 +188,11 @@ serve(async (req) => {
       user_id: user.id,
       persona_id: post.persona_id,
       type: 'post_published',
-      description: `Post publicado no Twitter via ${persona.name}`,
+      description: `Post publicado no Twitter via ${persona?.name ?? 'persona'}`,
     })
 
     return new Response(JSON.stringify({ tweet_id: tweetId }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),
     })
   } catch (error) {
     return new Response(JSON.stringify({ error: (error as Error).message }), {

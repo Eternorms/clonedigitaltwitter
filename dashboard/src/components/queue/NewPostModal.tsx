@@ -10,9 +10,10 @@ import { useToast } from '@/lib/contexts/ToastContext';
 interface NewPostModalProps {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-export function NewPostModal({ open, onClose }: NewPostModalProps) {
+export function NewPostModal({ open, onClose, onCreated }: NewPostModalProps) {
   const { personas, activePersona } = usePersona();
   const [personaId, setPersonaId] = useState(activePersona?.id ?? '');
   const [content, setContent] = useState('');
@@ -55,6 +56,7 @@ export function NewPostModal({ open, onClose }: NewPostModalProps) {
       addToast('Post criado com sucesso!', 'success');
       setContent('');
       setHashtagsInput('');
+      onCreated?.();
       onClose();
     } catch {
       addToast('Erro ao criar post.', 'error');

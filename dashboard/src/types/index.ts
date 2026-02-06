@@ -78,7 +78,7 @@ export interface NavItem {
   badge?: number;
 }
 
-export type QueueTab = 'queue' | 'scheduled' | 'published';
+export type QueueTab = 'queue' | 'scheduled' | 'published' | 'rejected';
 
 export interface TabItem {
   id: string;

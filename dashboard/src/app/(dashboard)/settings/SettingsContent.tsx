@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { updateProfile } from '@/lib/supabase/mutations';
+import { updateProfile, deleteAccount } from '@/lib/supabase/mutations';
 import { useToast } from '@/lib/contexts/ToastContext';
 import type { User as UserType, APIConnection } from '@/types';
 import { LLM_MODELS } from '@/types';
@@ -62,6 +62,7 @@ export function SettingsContent({ user }: SettingsContentProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedModel, setSelectedModel] = useState(user.preferredModel ?? 'gemini-2.0-flash');
   const [savingModel, setSavingModel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [notifications, setNotifications] = useState([
     { key: 'new_posts', label: 'Novos posts na fila', description: 'Receba alerta quando a IA gerar um novo post', enabled: true },
     { key: 'published', label: 'Posts publicados', description: 'Confirmação quando um post for publicado', enabled: true },
@@ -104,6 +105,22 @@ export function SettingsContent({ user }: SettingsContentProps) {
       addToast('Erro ao salvar modelo.', 'error');
     } finally {
       setSavingModel(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      addToast('Conta excluída com sucesso.', 'success');
+      // Redirect to login after short delay
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+    } catch {
+      addToast('Erro ao excluir conta. Tente novamente.', 'error');
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -313,10 +330,8 @@ export function SettingsContent({ user }: SettingsContentProps) {
         description="Todos os seus dados serão removidos permanentemente. Esta ação é irreversível."
         confirmLabel="Excluir Conta"
         cancelLabel="Manter Conta"
-        onConfirm={() => {
-          addToast('Funcionalidade em desenvolvimento.', 'info');
-          setShowDeleteConfirm(false);
-        }}
+        loading={deleting}
+        onConfirm={handleDeleteAccount}
         onCancel={() => setShowDeleteConfirm(false)}
       />
     </>

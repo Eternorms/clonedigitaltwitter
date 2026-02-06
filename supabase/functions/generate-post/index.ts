@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,7 +36,13 @@ serve(async (req) => {
       })
     }
 
-    const { persona_id, topic, count = 3, model: requestedModel } = await req.json()
+    // Rate limiting: 10 requests per minute per user
+    const rateLimitResult = checkRateLimit(`generate:${user.id}`, RATE_LIMITS.generatePost)
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult, corsHeaders)
+    }
+
+    const { persona_id, topic, count = 3, model: requestedModel, rss_source_id } = await req.json()
 
     // Supported models whitelist
     const SUPPORTED_MODELS = [
@@ -86,14 +93,93 @@ serve(async (req) => {
       })
     }
 
+    // --- Fetch RSS context: recent RSS-sourced posts for this persona ---
+    let rssContext = ''
+    let selectedSourceName = ''
+    try {
+      // If a specific RSS source is selected, get its name and filter posts
+      if (rss_source_id) {
+        const { data: source } = await supabase
+          .from('rss_sources')
+          .select('name')
+          .eq('id', rss_source_id)
+          .single()
+
+        if (source) {
+          selectedSourceName = source.name
+          const { data: rssArticles } = await supabase
+            .from('posts')
+            .select('content, source_name')
+            .eq('persona_id', persona_id)
+            .eq('source', 'rss')
+            .eq('source_name', source.name)
+            .order('created_at', { ascending: false })
+            .limit(10)
+
+          if (rssArticles && rssArticles.length > 0) {
+            const articleList = rssArticles
+              .map((a: { content: string; source_name: string | null }) =>
+                `- ${a.content}`)
+              .join('\n')
+            rssContext = `\n\nArtigos da fonte "${source.name}" (use como base para os posts):\n${articleList}`
+          }
+        }
+      } else {
+        // No specific source selected - use all RSS posts
+        const { data: rssArticles } = await supabase
+          .from('posts')
+          .select('content, source_name')
+          .eq('persona_id', persona_id)
+          .eq('source', 'rss')
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        if (rssArticles && rssArticles.length > 0) {
+          const articleList = rssArticles
+            .map((a: { content: string; source_name: string | null }) =>
+              `- [${a.source_name ?? 'RSS'}] ${a.content}`)
+            .join('\n')
+          rssContext = `\n\nArtigos recentes das fontes RSS (use como inspiração e contexto):\n${articleList}`
+        }
+      }
+    } catch {
+      // RSS context is optional — continue without it
+    }
+
+    // --- Fetch Google Trends for Brazil (free alternative to Twitter) ---
+    let trendsContext = ''
+    try {
+      const trendsResponse = await fetch(
+        'https://trends.google.com/trending/rss?geo=BR',
+        { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AgencyOS/1.0)' } }
+      )
+      if (trendsResponse.ok) {
+        const trendsXml = await trendsResponse.text()
+        // Parse <item><title>...</title></item> tags
+        const titleRegex = /<item>[\s\S]*?<title>([^<]+)<\/title>/g
+        const trends: string[] = []
+        let match
+        while ((match = titleRegex.exec(trendsXml)) !== null) {
+          if (trends.length >= 10) break
+          trends.push(match[1].trim())
+        }
+        if (trends.length > 0) {
+          const trendList = trends.map(t => `- ${t}`).join('\n')
+          trendsContext = `\n\nTendências de busca no Google Brasil agora:\n${trendList}`
+        }
+      }
+    } catch {
+      // Google Trends context is optional — continue without it
+    }
+
     const topics = (persona.topics as string[]) ?? []
     const prompt = `Gere ${count} posts para Twitter para a persona "${persona.name}" (${persona.handle}).
 Tom: ${persona.tone ?? 'informativo'}.
 Tópicos da persona: ${topics.join(', ')}.
 Foco no tópico: ${topic ?? topics[0] ?? 'geral'}.
 Idioma: Português-BR.
-Máximo 280 caracteres cada. Inclua hashtags relevantes.
-Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
+Máximo 280 caracteres cada. Inclua hashtags relevantes.${rssContext}${trendsContext}
+${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados acima, adaptando ao tom e estilo da persona.\n' : ''}Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
@@ -133,6 +219,10 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
     const generatedPosts = JSON.parse(jsonMatch[0])
 
     // Insert posts
+    const sourceName = selectedSourceName
+      ? `Gemini AI + ${selectedSourceName}`
+      : `Gemini AI (${model})`
+
     const { data: insertedPosts, error: insertError } = await supabase
       .from('posts')
       .insert(
@@ -141,7 +231,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
           content: p.content,
           status: 'pending',
           source: 'claude_ai',
-          source_name: `Gemini AI (${model})`,
+          source_name: sourceName,
           hashtags: p.hashtags ?? [],
         }))
       )
@@ -163,7 +253,7 @@ Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
     })
 
     return new Response(JSON.stringify({ posts: insertedPosts }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),
     })
   } catch (error) {
     return new Response(JSON.stringify({ error: (error as Error).message }), {

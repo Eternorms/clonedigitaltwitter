@@ -16,6 +16,12 @@ export function TopPostsTable({ posts }: TopPostsTableProps) {
       <div className="px-6 py-4 border-b border-slate-100">
         <h3 className="text-sm font-bold text-slate-900">Top Posts</h3>
       </div>
+      {posts.length === 0 ? (
+        <div className="px-6 py-12 text-center">
+          <p className="text-slate-400 text-sm font-medium">Nenhum post publicado ainda.</p>
+          <p className="text-slate-300 text-xs mt-1">Publique posts para ver o ranking aqui.</p>
+        </div>
+      ) : (
       <div className="divide-y divide-slate-50">
         {posts.map((post, index) => (
           <div key={post.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors">
@@ -44,6 +50,7 @@ export function TopPostsTable({ posts }: TopPostsTableProps) {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
