@@ -2,12 +2,19 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? ''
+  const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? ''
+  const resolvedOrigin = allowedOrigin && origin === allowedOrigin ? origin : ''
+  return {
+    'Access-Control-Allow-Origin': resolvedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  }
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -42,7 +49,28 @@ serve(async (req) => {
       return rateLimitResponse(rateLimitResult, corsHeaders)
     }
 
-    const { persona_id, topic, count = 3, model: requestedModel, rss_source_id } = await req.json()
+    const body = await req.json()
+    const { persona_id, topic, model: requestedModel, rss_source_id } = body
+
+    // Validate persona_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!persona_id || typeof persona_id !== 'string' || !uuidRegex.test(persona_id)) {
+      return new Response(JSON.stringify({ error: 'Invalid persona_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Validate and clamp count to 1-10
+    const count = Math.max(1, Math.min(10, Number(body.count) || 3))
+
+    // Validate rss_source_id if provided
+    if (rss_source_id && (typeof rss_source_id !== 'string' || !uuidRegex.test(rss_source_id))) {
+      return new Response(JSON.stringify({ error: 'Invalid rss_source_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Supported models whitelist
     const SUPPORTED_MODELS = [
@@ -70,11 +98,12 @@ serve(async (req) => {
       }
     }
 
-    // Fetch persona for prompt context
+    // Fetch persona for prompt context (verify ownership via user_id)
     const { data: persona, error: personaError } = await supabase
       .from('personas')
       .select('*')
       .eq('id', persona_id)
+      .eq('user_id', user.id)
       .single()
 
     if (personaError || !persona) {
@@ -82,6 +111,23 @@ serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // Validate rss_source_id belongs to this persona
+    if (rss_source_id) {
+      const { data: sourceCheck } = await supabase
+        .from('rss_sources')
+        .select('id')
+        .eq('id', rss_source_id)
+        .eq('persona_id', persona_id)
+        .single()
+
+      if (!sourceCheck) {
+        return new Response(JSON.stringify({ error: 'RSS source not found for this persona' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     // Call Gemini API
@@ -182,10 +228,10 @@ Máximo 280 caracteres cada. Inclua hashtags relevantes.${rssContext}${trendsCon
 ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados acima, adaptando ao tom e estilo da persona.\n' : ''}Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
@@ -198,7 +244,8 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text()
-      return new Response(JSON.stringify({ error: 'Gemini API error', details: errorText }), {
+      console.error('Gemini API error:', errorText)
+      return new Response(JSON.stringify({ error: 'Gemini API error', details: 'Verifique a configuração da API' }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -216,7 +263,34 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
       })
     }
 
-    const generatedPosts = JSON.parse(jsonMatch[0])
+    let generatedPosts: { content: string; hashtags: string[] }[]
+    try {
+      generatedPosts = JSON.parse(jsonMatch[0])
+    } catch {
+      return new Response(JSON.stringify({ error: 'Failed to parse AI response as JSON' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!Array.isArray(generatedPosts)) {
+      return new Response(JSON.stringify({ error: 'AI response is not an array' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Filter out posts exceeding 280 characters
+    const validPosts = generatedPosts.filter(
+      (p) => typeof p.content === 'string' && p.content.length > 0 && p.content.length <= 280
+    )
+
+    if (validPosts.length === 0) {
+      return new Response(JSON.stringify({ error: 'All generated posts exceeded 280 characters' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Insert posts
     const sourceName = selectedSourceName
@@ -226,7 +300,7 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
     const { data: insertedPosts, error: insertError } = await supabase
       .from('posts')
       .insert(
-        generatedPosts.map((p: { content: string; hashtags: string[] }) => ({
+        validPosts.map((p) => ({
           persona_id,
           content: p.content,
           status: 'pending',
@@ -244,13 +318,17 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
       })
     }
 
-    // Log activity
-    await supabase.from('activities').insert({
-      user_id: user.id,
-      persona_id,
-      type: 'ai_generated',
-      description: `${model} gerou ${generatedPosts.length} novos posts`,
-    })
+    // Log activity (best-effort, don't block the response)
+    try {
+      await supabase.from('activities').insert({
+        user_id: user.id,
+        persona_id,
+        type: 'ai_generated',
+        description: `${model} gerou ${validPosts.length} novos posts`,
+      })
+    } catch {
+      // Activity logging is non-critical
+    }
 
     return new Response(JSON.stringify({ posts: insertedPosts }), {
       headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),

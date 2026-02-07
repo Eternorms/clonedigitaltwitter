@@ -2,9 +2,49 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// A3: Use origin-aware CORS headers (same pattern as generate-post/publish-post)
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? ''
+  const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? ''
+  const resolvedOrigin = allowedOrigin && origin === allowedOrigin ? origin : ''
+  return {
+    'Access-Control-Allow-Origin': resolvedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  }
+}
+
+// A4: SSRF protection — block private/internal addresses
+function isUrlSafe(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false
+  }
+  const hostname = parsed.hostname.toLowerCase()
+  // Block localhost
+  if (hostname === 'localhost' || hostname === '[::1]') return false
+  // Block private IPv4 ranges
+  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number)
+    if (a === 127) return false                              // 127.x.x.x
+    if (a === 10) return false                               // 10.x.x.x
+    if (a === 172 && b >= 16 && b <= 31) return false        // 172.16-31.x.x
+    if (a === 192 && b === 168) return false                 // 192.168.x.x
+    if (a === 169 && b === 254) return false                 // 169.254.x.x (link-local)
+    if (a === 0) return false                                // 0.x.x.x
+  }
+  // Block IPv6 loopback
+  if (hostname === '::1' || hostname === '[::1]') return false
+  // Block metadata endpoints
+  if (hostname === 'metadata.google.internal') return false
+  if (hostname === '169.254.169.254') return false
+  return true
 }
 
 // Strip HTML tags and decode common entities
@@ -46,6 +86,8 @@ function hashContent(content: string): string {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -82,11 +124,21 @@ serve(async (req) => {
 
     const { rss_source_id } = await req.json()
 
-    // Fetch RSS source
+    // A5: Validate rss_source_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!rss_source_id || typeof rss_source_id !== 'string' || !uuidRegex.test(rss_source_id)) {
+      return new Response(JSON.stringify({ error: 'Invalid rss_source_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // A5: Fetch RSS source with ownership check via personas join
     const { data: source, error: sourceError } = await supabase
       .from('rss_sources')
-      .select('*, personas(id, name)')
+      .select('*, personas!inner(id, name, user_id)')
       .eq('id', rss_source_id)
+      .eq('personas.user_id', user.id)
       .single()
 
     if (sourceError || !source) {
@@ -96,7 +148,7 @@ serve(async (req) => {
       })
     }
 
-    const persona = source.personas as unknown as { id: string; name: string }
+    const persona = source.personas as unknown as { id: string; name: string; user_id: string }
 
     // Fetch existing posts for duplicate detection
     const { data: existingPosts } = await supabase
@@ -110,6 +162,14 @@ serve(async (req) => {
     const existingHashes = new Set(
       (existingPosts ?? []).map((p: { content: string }) => hashContent(p.content))
     )
+
+    // A4: SSRF protection — validate URL before fetching
+    if (!isUrlSafe(source.url)) {
+      return new Response(JSON.stringify({ error: 'URL blocked: private or internal address' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Fetch RSS feed with timeout
     const controller = new AbortController()

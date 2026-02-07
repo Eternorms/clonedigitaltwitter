@@ -49,7 +49,7 @@ export async function getPersonasDetail(): Promise<PersonaDetail[]> {
   const supabase = createClient()
   const { data: personas } = await supabase
     .from('personas')
-    .select('*, posts(count)')
+    .select('id, name, handle, emoji, description, tone, topics, twitter_connected, followers_count, engagement_rate, is_active, created_at, posts(count)')
     .eq('is_active', true)
     .order('created_at')
 

@@ -26,6 +26,16 @@ export function Modal({
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -44,11 +54,18 @@ export function Modal({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div className={cn('bg-white rounded-2xl shadow-hover w-full border border-slate-100', maxWidth)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="modal-title"
+              className={cn('bg-white rounded-2xl shadow-hover w-full border border-slate-100', maxWidth)}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                <h3 className="text-lg font-extrabold text-slate-900">{title}</h3>
+                <h3 id="modal-title" className="text-lg font-extrabold text-slate-900">{title}</h3>
                 <button
                   onClick={onClose}
+                  aria-label="Fechar"
                   className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   <X className="w-5 h-5" />

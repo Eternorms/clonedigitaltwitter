@@ -8,6 +8,7 @@ import { generateWithAI } from '@/lib/supabase/mutations';
 import { usePersona } from '@/lib/contexts/PersonaContext';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
+import { INPUT_CLASS } from '@/lib/styles';
 
 interface RSSSource {
   id: string;
@@ -57,6 +58,16 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
   const [loadingTrends, setLoadingTrends] = useState(false);
   const { addToast } = useToast();
 
+  // Reset form when modal opens
+  useEffect(() => {
+    if (open) {
+      setPersonaId(activePersona?.id ?? '');
+      setTopic('');
+      setCount(3);
+      setSelectedSourceId('');
+    }
+  }, [open, activePersona?.id]);
+
   // Fetch RSS sources when persona changes
   useEffect(() => {
     if (!personaId) {
@@ -65,15 +76,19 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
     }
 
     const fetchSources = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('rss_sources')
-        .select('id, name, icon')
-        .eq('persona_id', personaId)
-        .eq('status', 'active');
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from('rss_sources')
+          .select('id, name, icon')
+          .eq('persona_id', personaId)
+          .eq('status', 'active');
 
-      setRssSources(data ?? []);
-      setSelectedSourceId('');
+        setRssSources(data ?? []);
+        setSelectedSourceId('');
+      } catch {
+        setRssSources([]);
+      }
     };
 
     fetchSources();
@@ -89,13 +104,6 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
     }
   }, [open, trends.length]);
 
-  // Update personaId when activePersona changes
-  useEffect(() => {
-    if (activePersona?.id) {
-      setPersonaId(activePersona.id);
-    }
-  }, [activePersona?.id]);
-
   const handleGenerate = async () => {
     if (!personaId) {
       addToast('Selecione uma persona.', 'error');
@@ -109,8 +117,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
       setTopic('');
       onGenerated();
       onClose();
-    } catch (error) {
-      console.error('Generate error:', error);
+    } catch {
       addToast('Erro ao gerar posts com IA. Verifique a configuração.', 'error');
     } finally {
       setLoading(false);
@@ -120,9 +127,6 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
   const handleTrendClick = (trend: string) => {
     setTopic(trend);
   };
-
-  const inputClass =
-    'w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all';
 
   return (
     <Modal open={open} title="Gerar com IA" onClose={onClose}>
@@ -141,7 +145,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
           <select
             value={personaId}
             onChange={(e) => setPersonaId(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             <option value="">Selecione uma persona</option>
             {personas.map((p) => (
@@ -162,7 +166,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
             <select
               value={selectedSourceId}
               onChange={(e) => setSelectedSourceId(e.target.value)}
-              className={inputClass}
+              className={INPUT_CLASS}
             >
               <option value="">Usar todas as fontes</option>
               {rssSources.map((source) => (
@@ -186,7 +190,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="Ex: inteligência artificial, startups, produtividade..."
-            className={inputClass}
+            className={INPUT_CLASS}
           />
           <p className="text-xs text-slate-400 mt-1">
             Deixe vazio para usar os tópicos padrão da persona.
@@ -235,7 +239,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
           <select
             value={count}
             onChange={(e) => setCount(Number(e.target.value))}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             <option value={1}>1 post</option>
             <option value={3}>3 posts</option>

@@ -3,9 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? ''
+  const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? ''
+  const resolvedOrigin = allowedOrigin && origin === allowedOrigin ? origin : ''
+  return {
+    'Access-Control-Allow-Origin': resolvedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  }
 }
 
 // Percent-encode per RFC 3986
@@ -70,6 +76,8 @@ async function buildOAuthHeader(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -106,11 +114,21 @@ serve(async (req) => {
 
     const { post_id } = await req.json()
 
-    // Fetch post with persona
+    // Validate post_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!post_id || typeof post_id !== 'string' || !uuidRegex.test(post_id)) {
+      return new Response(JSON.stringify({ error: 'Invalid post_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Fetch post with persona, verifying ownership through personas.user_id
     const { data: post, error: postError } = await supabase
       .from('posts')
-      .select('*, personas(name)')
+      .select('*, personas!inner(name, user_id)')
       .eq('id', post_id)
+      .eq('personas.user_id', user.id)
       .single()
 
     if (postError || !post) {
@@ -120,7 +138,15 @@ serve(async (req) => {
       })
     }
 
-    const persona = post.personas as unknown as { name: string }
+    // Verify post status is publishable
+    if (post.status !== 'approved' && post.status !== 'scheduled') {
+      return new Response(JSON.stringify({ error: 'Post must be approved or scheduled to publish' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const persona = post.personas as unknown as { name: string; user_id: string }
 
     // Read Twitter OAuth 1.0a credentials from env vars
     const consumerKey = Deno.env.get('TWITTER_API_KEY')
@@ -183,13 +209,17 @@ serve(async (req) => {
       })
     }
 
-    // Log activity
-    await supabase.from('activities').insert({
-      user_id: user.id,
-      persona_id: post.persona_id,
-      type: 'post_published',
-      description: `Post publicado no Twitter via ${persona?.name ?? 'persona'}`,
-    })
+    // Log activity (best-effort, don't block the response)
+    try {
+      await supabase.from('activities').insert({
+        user_id: user.id,
+        persona_id: post.persona_id,
+        type: 'post_published',
+        description: `Post publicado no Twitter via ${persona?.name ?? 'persona'}`,
+      })
+    } catch {
+      // Activity logging is non-critical
+    }
 
     return new Response(JSON.stringify({ tweet_id: tweetId }), {
       headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),

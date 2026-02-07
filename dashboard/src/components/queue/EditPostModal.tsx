@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { updatePostContent } from '@/lib/supabase/mutations';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { INPUT_CLASS } from '@/lib/styles';
+import { cn } from '@/lib/utils';
 import type { Post } from '@/types';
 
 interface EditPostModalProps {
@@ -18,6 +20,11 @@ export function EditPostModal({ open, onClose, post, onSave }: EditPostModalProp
   const [content, setContent] = useState(post.content);
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
+
+  // Sync content when post.content changes (e.g. realtime update)
+  useEffect(() => {
+    setContent(post.content);
+  }, [post.content]);
 
   const charCount = content.length;
   const isOverLimit = charCount > 280;
@@ -46,15 +53,12 @@ export function EditPostModal({ open, onClose, post, onSave }: EditPostModalProp
     }
   };
 
-  const inputClass =
-    'w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all';
-
   return (
     <Modal open={open} title="Editar Post" onClose={onClose}>
       <div className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <label htmlFor="edit-post-content" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Conteúdo
             </label>
             <span
@@ -66,10 +70,11 @@ export function EditPostModal({ open, onClose, post, onSave }: EditPostModalProp
             </span>
           </div>
           <textarea
+            id="edit-post-content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={5}
-            className={inputClass + ' resize-none'}
+            className={cn(INPUT_CLASS, 'resize-none')}
           />
         </div>
 

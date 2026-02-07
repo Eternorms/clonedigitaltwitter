@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Rss, Cpu, Image, Check, Pencil, Calendar, CheckCircle2, Twitter, Send } from 'lucide-react';
+import { Rss, Cpu, Image, Check, Pencil, Calendar, Twitter, Send } from 'lucide-react';
 import { formatRelativeTime, formatScheduledTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
@@ -29,6 +29,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
   const SourceIcon = sourceIconMap[post.source] || Rss;
   const [loadingAction, setLoadingAction] = useState<'approve' | 'reject' | 'publish' | null>(null);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content);
   const { addToast } = useToast();
@@ -157,7 +158,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
         <div className="w-64 flex flex-col justify-center gap-3 pl-8 border-l border-slate-100">
           <Button
             variant="primary"
-            onClick={handlePublish}
+            onClick={() => setShowPublishConfirm(true)}
             loading={loadingAction === 'publish'}
             disabled={loadingAction !== null}
             icon={<Send className="w-4 h-4" />}
@@ -165,15 +166,28 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
           >
             Publicar no Twitter
           </Button>
-          <button
+          <Button
+            variant="secondary"
             onClick={() => setShowEditModal(true)}
             disabled={loadingAction !== null}
-            className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            icon={<Pencil className="w-4 h-4" />}
+            className="w-full py-3"
           >
-            <Pencil className="w-4 h-4" />
             Editar Texto
-          </button>
+          </Button>
         </div>
+
+        <ConfirmDialog
+          open={showPublishConfirm}
+          title="Publicar no Twitter"
+          description="Tem certeza que deseja publicar este post no Twitter? Esta ação não pode ser desfeita."
+          confirmLabel="Publicar"
+          loading={loadingAction === 'publish'}
+          onConfirm={() => {
+            handlePublish().finally(() => setShowPublishConfirm(false));
+          }}
+          onCancel={() => setShowPublishConfirm(false)}
+        />
 
         <EditPostModal
           open={showEditModal}
@@ -247,14 +261,15 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
         >
           Aprovar Post
         </Button>
-        <button
+        <Button
+          variant="secondary"
           onClick={() => setShowEditModal(true)}
           disabled={loadingAction !== null}
-          className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          icon={<Pencil className="w-4 h-4" />}
+          className="w-full py-3"
         >
-          <Pencil className="w-4 h-4" />
           Editar Texto
-        </button>
+        </Button>
         <Button
           variant="destructive"
           onClick={() => setShowRejectConfirm(true)}
@@ -286,7 +301,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
 }
 
 function renderContent(content: string) {
-  const parts = content.split(/(#\w+)/g);
+  const parts = content.split(/(#[a-zA-Z0-9_\u00C0-\u024F]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('#')) {
       return (

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { createPost } from '@/lib/supabase/mutations';
 import { usePersona } from '@/lib/contexts/PersonaContext';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { INPUT_CLASS } from '@/lib/styles';
+import { cn } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -20,6 +22,15 @@ export function NewPostModal({ open, onClose, onCreated }: NewPostModalProps) {
   const [hashtagsInput, setHashtagsInput] = useState('');
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
+
+  // Sync persona and reset form when modal opens
+  useEffect(() => {
+    if (open) {
+      setPersonaId(activePersona?.id ?? '');
+      setContent('');
+      setHashtagsInput('');
+    }
+  }, [open, activePersona?.id]);
 
   const charCount = content.length;
   const isOverLimit = charCount > 280;
@@ -65,20 +76,18 @@ export function NewPostModal({ open, onClose, onCreated }: NewPostModalProps) {
     }
   };
 
-  const inputClass =
-    'w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all';
-
   return (
     <Modal open={open} title="Novo Post" onClose={onClose}>
       <div className="space-y-4">
         <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+          <label htmlFor="new-post-persona" className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
             Persona
           </label>
           <select
+            id="new-post-persona"
             value={personaId}
             onChange={(e) => setPersonaId(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             <option value="">Selecione uma persona</option>
             {personas.map((p) => (
@@ -91,7 +100,7 @@ export function NewPostModal({ open, onClose, onCreated }: NewPostModalProps) {
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <label htmlFor="new-post-content" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Conteúdo
             </label>
             <span
@@ -103,24 +112,26 @@ export function NewPostModal({ open, onClose, onCreated }: NewPostModalProps) {
             </span>
           </div>
           <textarea
+            id="new-post-content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Escreva o conteúdo do post..."
             rows={4}
-            className={inputClass + ' resize-none'}
+            className={cn(INPUT_CLASS, 'resize-none')}
           />
         </div>
 
         <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+          <label htmlFor="new-post-hashtags" className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
             Hashtags
           </label>
           <input
+            id="new-post-hashtags"
             type="text"
             value={hashtagsInput}
             onChange={(e) => setHashtagsInput(e.target.value)}
             placeholder="#tech, #ia, #startup (separadas por vírgula)"
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
 

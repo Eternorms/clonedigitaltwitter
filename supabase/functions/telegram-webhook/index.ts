@@ -3,6 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 serve(async (req) => {
   try {
+    // A1: Verify webhook secret token
+    const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
+    if (webhookSecret) {
+      const headerSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token')
+      if (headerSecret !== webhookSecret) {
+        return new Response('Unauthorized', { status: 401 })
+      }
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -22,6 +31,18 @@ serve(async (req) => {
     const chatId = message.chat.id
     const text = message.text.trim()
 
+    // A1: Verify chat ID is in the allowed list
+    const allowedChatIds = Deno.env.get('TELEGRAM_ALLOWED_CHAT_IDS')
+    if (allowedChatIds) {
+      const allowed = allowedChatIds.split(',').map(id => id.trim())
+      if (!allowed.includes(String(chatId))) {
+        return new Response('Forbidden', { status: 403 })
+      }
+    }
+
+    // A2: Owner user ID for scoping post operations
+    const ownerUserId = Deno.env.get('TELEGRAM_OWNER_USER_ID')
+
     async function sendMessage(chatId: number, text: string) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
@@ -32,10 +53,14 @@ serve(async (req) => {
 
     // /pending - List pending posts
     if (text === '/pending' || text === '/start') {
-      const { data: posts } = await supabase
+      let pendingQuery = supabase
         .from('posts')
-        .select('id, content, personas(name)')
+        .select('id, content, personas!inner(name, user_id)')
         .eq('status', 'pending')
+      if (ownerUserId) {
+        pendingQuery = pendingQuery.eq('personas.user_id', ownerUserId)
+      }
+      const { data: posts } = await pendingQuery
         .order('created_at', { ascending: false })
         .limit(5)
 
@@ -62,12 +87,15 @@ serve(async (req) => {
     // /approve <id> - Approve a post
     if (text.startsWith('/approve ')) {
       const shortId = text.replace('/approve ', '').trim()
-      const { data: posts } = await supabase
+      let approveQuery = supabase
         .from('posts')
-        .select('id')
+        .select('id, personas!inner(user_id)')
         .ilike('id', `${shortId}%`)
         .eq('status', 'pending')
-        .limit(1)
+      if (ownerUserId) {
+        approveQuery = approveQuery.eq('personas.user_id', ownerUserId)
+      }
+      const { data: posts } = await approveQuery.limit(1)
 
       if (!posts || posts.length === 0) {
         await sendMessage(chatId, 'Post nao encontrado ou ja processado.')
@@ -82,12 +110,15 @@ serve(async (req) => {
     // /reject <id> - Reject a post
     if (text.startsWith('/reject ')) {
       const shortId = text.replace('/reject ', '').trim()
-      const { data: posts } = await supabase
+      let rejectQuery = supabase
         .from('posts')
-        .select('id')
+        .select('id, personas!inner(user_id)')
         .ilike('id', `${shortId}%`)
         .eq('status', 'pending')
-        .limit(1)
+      if (ownerUserId) {
+        rejectQuery = rejectQuery.eq('personas.user_id', ownerUserId)
+      }
+      const { data: posts } = await rejectQuery.limit(1)
 
       if (!posts || posts.length === 0) {
         await sendMessage(chatId, 'Post nao encontrado ou ja processado.')

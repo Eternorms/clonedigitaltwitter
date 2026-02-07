@@ -50,14 +50,21 @@ export function ConfirmDialog({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div className="bg-white rounded-2xl p-6 shadow-hover max-w-md w-full border border-slate-100">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="confirm-dialog-title"
+              aria-describedby="confirm-dialog-desc"
+              className="bg-white rounded-2xl p-6 shadow-hover max-w-md w-full border border-slate-100"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-red-50">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
                 </div>
-                <h3 className="text-lg font-extrabold text-slate-900">{title}</h3>
+                <h3 id="confirm-dialog-title" className="text-lg font-extrabold text-slate-900">{title}</h3>
               </div>
-              <p className="text-sm text-slate-500 font-medium mb-6">{description}</p>
+              <p id="confirm-dialog-desc" className="text-sm text-slate-500 font-medium mb-6">{description}</p>
               <div className="flex justify-end gap-3">
                 <Button variant="secondary" onClick={onCancel} disabled={loading}>
                   {cancelLabel}
