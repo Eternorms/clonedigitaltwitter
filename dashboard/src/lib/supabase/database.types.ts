@@ -59,6 +59,7 @@ export type Database = {
           twitter_connected: boolean
           followers_count: number
           engagement_rate: number
+          last_tweet_fetch_at: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -78,6 +79,7 @@ export type Database = {
           twitter_connected?: boolean
           followers_count?: number
           engagement_rate?: number
+          last_tweet_fetch_at?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -97,6 +99,7 @@ export type Database = {
           twitter_connected?: boolean
           followers_count?: number
           engagement_rate?: number
+          last_tweet_fetch_at?: string | null
           is_active?: boolean
           updated_at?: string
         }
@@ -212,6 +215,49 @@ export type Database = {
           },
           {
             foreignKeyName: 'activities_persona_id_fkey'
+            columns: ['persona_id']
+            isOneToOne: false
+            referencedRelation: 'personas'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      cached_tweets: {
+        Row: {
+          id: string
+          persona_id: string
+          tweet_id: string
+          text: string
+          tweeted_at: string
+          like_count: number
+          retweet_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          persona_id: string
+          tweet_id: string
+          text: string
+          tweeted_at: string
+          like_count?: number
+          retweet_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          persona_id?: string
+          tweet_id?: string
+          text?: string
+          tweeted_at?: string
+          like_count?: number
+          retweet_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'cached_tweets_persona_id_fkey'
             columns: ['persona_id']
             isOneToOne: false
             referencedRelation: 'personas'

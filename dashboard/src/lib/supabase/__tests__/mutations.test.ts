@@ -169,7 +169,7 @@ describe('mutations', () => {
       const result = await generateWithAI('persona-1', 'AI topic', 5)
 
       expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
-        body: { persona_id: 'persona-1', topic: 'AI topic', count: 5, rss_source_id: undefined },
+        body: { persona_id: 'persona-1', topic: 'AI topic', count: 5, rss_source_id: undefined, use_tweet_style: false },
       })
       expect(result).toEqual({ success: true })
     })
@@ -186,7 +186,7 @@ describe('mutations', () => {
     it('uses default count of 3', async () => {
       await generateWithAI('persona-1')
       expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
-        body: { persona_id: 'persona-1', topic: undefined, count: 3, rss_source_id: undefined },
+        body: { persona_id: 'persona-1', topic: undefined, count: 3, rss_source_id: undefined, use_tweet_style: false },
       })
     })
   })
