@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Clone Digital Twitter is a content management tool for automated Twitter posting. It uses Gemini AI for content generation, Twitter OAuth 1.0a for publishing, and Telegram for notifications. Frontend dashboard is functional with Supabase integration; backend needs real credentials and deploy.
+Clone Digital Twitter is a content management tool for automated Twitter posting. It uses Gemini AI for content generation (with optional tweet-style learning from user's real Twitter history), Twitter OAuth 1.0a for publishing and reading tweets, and Telegram for notifications. Frontend dashboard is fully functional with Supabase integration, mobile responsive, accessible, with loading skeletons and empty states. Backend needs real credentials and deploy.
 
 **Language:** Documentation and UI strings are in **Portuguese (pt-BR)**.
 
@@ -14,10 +14,11 @@ Clone Digital Twitter is a content management tool for automated Twitter posting
 Cloudflare Pages              Supabase
 +---------------------+      +-----------------------------+
 | Next.js 14          |      | Auth (email/password)       |
-| @supabase/ssr       |----->| PostgreSQL (5 tables + RLS) |
+| @supabase/ssr       |----->| PostgreSQL (6 tables + RLS) |
 | Tailwind CSS v3     |      | Storage (post-images)       |
 +---------------------+      | Edge Functions (Deno):      |
-                              |   generate-post (Gemini)    |
+                              |   generate-post (Gemini+Tw) |
+                              |   fetch-tweets (Twitter v2) |
                               |   publish-post (Twitter)    |
                               |   sync-rss                  |
                               |   telegram-webhook          |
@@ -28,7 +29,7 @@ Cloudflare Pages              Supabase
 
 **Two directories:**
 - **`dashboard/`** — Next.js 14 App Router, TypeScript, Tailwind CSS v3, `@supabase/ssr`
-- **`supabase/`** — 11 SQL migrations, 5 Edge Functions (Deno/TypeScript), shared rate-limit + twitter-auth utils
+- **`supabase/`** — 11 SQL migrations, 5 Edge Functions (Deno/TypeScript), shared rate-limit + twitter-auth + types utils
 
 The Python backend (`api/`) and Docker infra (`infra/`) were removed in the Supabase migration.
 
@@ -135,6 +136,42 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - `TWITTER_BEARER_TOKEN` — For trending topics context (optional)
 - `TELEGRAM_BOT_TOKEN` — Telegram notifications (optional)
 
+## Testing
+
+```bash
+cd dashboard
+npm run test         # Watch mode
+npm run test:run     # Single run (162 tests)
+```
+
+- **162 tests** across 12 suites (Vitest + React Testing Library + jsdom)
+- Supabase client mock with chainable Proxy pattern (`src/test/mocks/supabase.ts`)
+- Component tests: Button, Badge, Modal, ConfirmDialog, Avatar, PostCard, GenerateAIModal
+- Unit tests: utils, mutations, queries
+
+## Tweet-Based Generation (Feature)
+
+The `generate-post` function supports an optional `use_tweet_style` mode that:
+1. Fetches user's real tweets via `fetch-tweets` Edge Function (Twitter API v2)
+2. Caches tweets in `cached_tweets` table (6h TTL, max 500/persona)
+3. Injects top-performing + most-recent tweets as few-shot examples in the Gemini prompt
+4. The AI mimics the user's writing style, vocabulary, and hashtag patterns
+
+Toggle in GenerateAIModal defaults to OFF (backward compatible). Requires Twitter API credentials.
+
+## UI Features
+
+- **Mobile responsive**: Collapsible sidebar with hamburger menu, responsive grids
+- **Loading skeletons**: Animated placeholders for all pages via Suspense boundaries
+- **Empty states**: Contextual messages with action buttons for Queue, Sources, Analytics, Persona
+- **Accessibility**: Focus traps in modals, aria-labels, focus rings, keyboard navigation
+- **404 page**: Custom not-found page with Clean Studio design
+
+## CI/CD
+
+- **`.github/workflows/ci.yml`** — Lint + build on push/PR (Node 20)
+- **`.github/workflows/deploy.yml`** — Cloudflare Pages + Edge Functions deploy on main push
+
 ## What's Left (from docs/CONTEXT.md)
 
 - [ ] Create Supabase project and configure `.env.local` with real keys
@@ -142,6 +179,18 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - [ ] Enable pg_cron and schedule `check_scheduled_posts()`
 - [ ] Configure Edge Function secrets
 - [ ] Deploy to Cloudflare Pages
-- [ ] Connect Twitter Developer App
+- [ ] Connect Twitter Developer App (Basic tier for tweet reading)
 - [ ] Configure Telegram Bot webhook
 - [ ] End-to-end testing
+
+## Session History (2026-02-07)
+
+### Parallel Worktree Session (4 agents)
+- **Phase 1**: UI Polish — mobile responsive, skeletons, empty states, a11y, 404 (26 files, +696/-188)
+- **Phase 2**: Edge Functions — Deno.serve(), retry logic, validation, Telegram inline keyboard (5 files, +560/-83)
+- **Phase 3**: Testing — Vitest setup, 132 tests across 9 suites (14 files)
+- **Phase 4**: Infra — CI/CD, README, env template, docs update (7 files, +541/-135)
+
+### Sequential Pipeline Session (8 agents)
+- **Tweet-based generation**: researcher → evaluator → architect → developer → critic → fixer → tester → integrator
+- 21 files, +2404/-90 lines, 162 tests (30 new), 16 critique issues found and fixed
