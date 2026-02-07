@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -26,10 +26,59 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
     return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onCancel]);
+
+  // Focus trap
+  const handleKeyDownTrap = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !dialogRef.current) return;
+
+    const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusableElements.length === 0) return;
+
+    const firstEl = focusableElements[0];
+    const lastEl = focusableElements[focusableElements.length - 1];
+
+    if (e.shiftKey) {
+      if (document.activeElement === firstEl) {
+        e.preventDefault();
+        lastEl.focus();
+      }
+    } else {
+      if (document.activeElement === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
+    }
+  }, []);
+
+  // Auto-focus on open
+  useEffect(() => {
+    if (!open || !dialogRef.current) return;
+    const timer = setTimeout(() => {
+      const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, [open]);
 
   return (
@@ -51,12 +100,14 @@ export function ConfirmDialog({
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <div
+              ref={dialogRef}
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="confirm-dialog-title"
               aria-describedby="confirm-dialog-desc"
               className="bg-white rounded-2xl p-6 shadow-hover max-w-md w-full border border-slate-100"
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={handleKeyDownTrap}
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-red-50">

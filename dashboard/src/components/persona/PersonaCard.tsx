@@ -14,7 +14,7 @@ export function PersonaCard({ persona, onEdit }: PersonaCardProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-center gap-4">
-          <span className="text-3xl w-14 h-14 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100 shadow-sm">
+          <span className="text-3xl w-14 h-14 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100 shadow-sm" role="img" aria-label={persona.name}>
             {persona.emoji}
           </span>
           <div>
@@ -24,7 +24,8 @@ export function PersonaCard({ persona, onEdit }: PersonaCardProps) {
         </div>
         <button
           onClick={() => onEdit?.(persona)}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+          aria-label={`Editar ${persona.name}`}
+          className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
         >
           <Settings className="w-5 h-5" />
         </button>

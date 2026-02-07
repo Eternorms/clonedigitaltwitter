@@ -79,7 +79,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
   // Published posts
   if (isPublished) {
     return (
-      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 flex gap-6 opacity-80 hover:opacity-100 transition-all">
+      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 flex flex-col sm:flex-row gap-6 opacity-80 hover:opacity-100 transition-all">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-4">
             <span className="px-3 py-1 rounded-lg bg-white border border-slate-100 text-slate-600 text-xs font-bold flex items-center gap-2">
@@ -101,7 +101,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
             </p>
           </div>
         </div>
-        <div className="w-48 flex items-center justify-center border-l border-slate-200 pl-6">
+        <div className="w-full sm:w-48 flex items-center justify-center border-t sm:border-t-0 sm:border-l border-slate-200 pt-4 sm:pt-0 sm:pl-6">
           <p className="text-sky-500 font-bold text-sm flex items-center gap-2">
             <Twitter className="w-5 h-5" />
             Publicado
@@ -114,7 +114,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
   // Approved/Scheduled posts — show publish button
   if (isApproved) {
     return (
-      <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft flex gap-6 hover:border-slate-300 transition-all">
+      <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft flex flex-col sm:flex-row gap-6 hover:border-slate-300 transition-all">
         <div className="flex-1">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -155,7 +155,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
             </div>
           </div>
         </div>
-        <div className="w-64 flex flex-col justify-center gap-3 pl-8 border-l border-slate-100">
+        <div className="w-full sm:w-64 flex flex-col justify-center gap-3 pt-4 sm:pt-0 sm:pl-8 border-t sm:border-t-0 sm:border-l border-slate-100">
           <Button
             variant="primary"
             onClick={() => setShowPublishConfirm(true)}
@@ -201,7 +201,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
 
   // Pending posts
   return (
-    <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-soft flex gap-8 relative overflow-hidden group hover:border-slate-300 transition-all">
+    <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-soft flex flex-col sm:flex-row gap-6 sm:gap-8 relative overflow-hidden group hover:border-slate-300 transition-all">
       {isPending && (
         <div className="absolute top-6 right-6">
           <Badge variant="pending" pulse>
@@ -250,7 +250,7 @@ export function PostCard({ post, onStatusChange }: PostCardProps) {
         </div>
       </div>
 
-      <div className="w-64 flex flex-col justify-center gap-3 pl-8 border-l border-slate-100">
+      <div className="w-full sm:w-64 flex flex-col justify-center gap-3 pt-4 sm:pt-0 sm:pl-8 border-t sm:border-t-0 sm:border-l border-slate-100">
         <Button
           variant="primary"
           onClick={handleApprove}

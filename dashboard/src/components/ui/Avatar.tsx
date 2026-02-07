@@ -36,6 +36,8 @@ export function Avatar({
   if (emoji) {
     return (
       <div
+        role="img"
+        aria-label={alt || 'Avatar'}
         className={cn(
           'rounded-full bg-slate-900 text-white flex items-center justify-center font-bold border-4 border-white shadow-sm',
           sizeStyles[size],

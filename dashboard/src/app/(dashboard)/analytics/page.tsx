@@ -1,8 +1,11 @@
-import { TrendingUp, Eye, Heart, Repeat2 } from 'lucide-react';
+import { Suspense } from 'react';
+import { TrendingUp, Eye, Heart, Repeat2, BarChart2 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { PostsChart } from '@/components/dashboard/PostsChart';
 import { TopPostsTable } from '@/components/dashboard/TopPostsTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { AnalyticsSkeleton } from '@/components/ui/Skeleton';
 import { getDailyMetrics, getTopPosts } from '@/lib/supabase/queries';
 
 function formatNumber(n: number): string {
@@ -10,9 +13,10 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
-export default async function AnalyticsPage() {
+async function AnalyticsContent() {
   const [metrics, topPosts] = await Promise.all([getDailyMetrics(), getTopPosts()]);
 
+  const hasData = metrics.length > 0 || topPosts.length > 0;
   const totalImpressions = metrics.reduce((sum, m) => sum + m.impressions, 0);
   const totalEngagements = metrics.reduce((sum, m) => sum + m.engagements, 0);
   const totalLikes = topPosts.reduce((sum, p) => sum + (p.likes ?? 0), 0);
@@ -29,7 +33,15 @@ export default async function AnalyticsPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-4 gap-6 mb-10">
+      {!hasData ? (
+        <EmptyState
+          icon={<BarChart2 className="w-8 h-8" />}
+          title="Sem dados de performance"
+          description="Os dados de analytics aparecerão aqui assim que seus posts começarem a receber impressões e engajamentos."
+        />
+      ) : (
+      <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <StatCard
           label="Impressões"
           value={formatNumber(totalImpressions)}
@@ -57,12 +69,22 @@ export default async function AnalyticsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
         <PerformanceChart metrics={metrics} />
         <PostsChart metrics={metrics} />
       </div>
 
       <TopPostsTable posts={topPosts} />
+      </>
+      )}
     </>
+  );
+}
+
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<AnalyticsSkeleton />}>
+      <AnalyticsContent />
+    </Suspense>
   );
 }
