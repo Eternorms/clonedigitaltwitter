@@ -1,9 +1,11 @@
+import { Suspense } from 'react';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { getQueueStats, getActivities } from '@/lib/supabase/queries';
 
-export default async function DashboardPage() {
+async function DashboardContent() {
   const [stats, activities] = await Promise.all([getQueueStats(), getActivities()]);
 
   return (
@@ -19,8 +21,8 @@ export default async function DashboardPage() {
 
       <DashboardStats stats={stats} />
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
           <ActivityFeed activities={activities} />
         </div>
         <div>
@@ -28,5 +30,13 @@ export default async function DashboardPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
   );
 }

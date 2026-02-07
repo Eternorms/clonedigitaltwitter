@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PersonaCard } from '@/components/persona/PersonaCard';
 import { NewPersonaModal } from '@/components/persona/NewPersonaModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { PersonaDetail } from '@/types';
 
 interface PersonaPageContentProps {
@@ -17,7 +18,7 @@ export function PersonaPageContent({ personas }: PersonaPageContentProps) {
 
   return (
     <>
-      <header className="flex items-center justify-between mb-10">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
         <div>
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
             Personas
@@ -36,14 +37,24 @@ export function PersonaPageContent({ personas }: PersonaPageContentProps) {
         </Button>
       </header>
 
-      <div className="grid grid-cols-3 gap-6">
-        {personas.map((persona) => (
-          <PersonaCard
-            key={persona.id}
-            persona={persona}
-            onEdit={(p) => setEditingPersona(p)}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {personas.length > 0 ? (
+          personas.map((persona) => (
+            <PersonaCard
+              key={persona.id}
+              persona={persona}
+              onEdit={(p) => setEditingPersona(p)}
+            />
+          ))
+        ) : (
+          <EmptyState
+            icon={<Users className="w-8 h-8" />}
+            title="Nenhuma persona criada"
+            description="Crie uma persona para definir o tom de voz e o estilo do conteúdo gerado pela IA."
+            actionLabel="Criar Persona"
+            onAction={() => setShowNewPersona(true)}
           />
-        ))}
+        )}
       </div>
 
       <NewPersonaModal

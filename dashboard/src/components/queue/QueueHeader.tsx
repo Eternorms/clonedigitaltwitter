@@ -10,7 +10,7 @@ interface QueueHeaderProps {
 
 export function QueueHeader({ onNewPost, onGenerateAI }: QueueHeaderProps) {
   return (
-    <header className="flex items-center justify-between mb-12">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-12">
       <div>
         <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
           Fila de Aprovação

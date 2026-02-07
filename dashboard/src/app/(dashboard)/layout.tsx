@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MainContent } from '@/components/layout/MainContent';
+import { SidebarProvider } from '@/components/layout/SidebarProvider';
 import { PersonaProvider } from '@/lib/contexts/PersonaContext';
 import { ToastProvider } from '@/lib/contexts/ToastContext';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -21,12 +22,14 @@ export default async function DashboardLayout({
   return (
     <PersonaProvider initialPersonas={personas}>
       <ToastProvider>
-        <div className="min-h-screen bg-slate-50 flex">
-          <Sidebar user={user} />
-          <ErrorBoundary>
-            <MainContent>{children}</MainContent>
-          </ErrorBoundary>
-        </div>
+        <SidebarProvider>
+          <div className="min-h-screen bg-slate-50 flex">
+            <Sidebar user={user} />
+            <ErrorBoundary>
+              <MainContent>{children}</MainContent>
+            </ErrorBoundary>
+          </div>
+        </SidebarProvider>
       </ToastProvider>
     </PersonaProvider>
   );

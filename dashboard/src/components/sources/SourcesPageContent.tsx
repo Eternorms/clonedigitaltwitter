@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Rss } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SourceCard } from '@/components/dashboard/SourceCard';
 import { NewSourceModal } from '@/components/sources/NewSourceModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { RSSSource } from '@/types';
 
 interface SourcesPageContentProps {
@@ -38,7 +39,7 @@ export function SourcesPageContent({ sources: initialSources }: SourcesPageConte
 
   return (
     <>
-      <header className="flex items-center justify-between mb-10">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
         <div>
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
             Fontes (RSS)
@@ -68,17 +69,23 @@ export function SourcesPageContent({ sources: initialSources }: SourcesPageConte
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredSources.length > 0 ? (
           filteredSources.map((source) => (
             <SourceCard key={source.id} source={source} onRemove={handleRemove} />
           ))
-        ) : (
-          <div className="col-span-3 text-center py-16 text-slate-400">
-            <p className="text-sm font-medium">
-              {searchQuery ? 'Nenhuma fonte encontrada.' : 'Nenhuma fonte configurada.'}
-            </p>
+        ) : searchQuery ? (
+          <div className="col-span-full text-center py-16 text-slate-400">
+            <p className="text-sm font-medium">Nenhuma fonte encontrada.</p>
           </div>
+        ) : (
+          <EmptyState
+            icon={<Rss className="w-8 h-8" />}
+            title="Nenhuma fonte RSS"
+            description="Conecte feeds RSS para importar conteúdo automaticamente e abastecer sua fila de posts."
+            actionLabel="Adicionar Fonte"
+            onAction={() => setShowNewSource(true)}
+          />
         )}
       </div>
 

@@ -73,7 +73,7 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft hover:shadow-hover transition-all group">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-2xl w-12 h-12 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100">
+          <span className="text-2xl w-12 h-12 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100" role="img" aria-label={source.name}>
             {source.icon}
           </span>
           <div>
@@ -98,7 +98,7 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
             aria-label="Sincronizar"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -106,7 +106,7 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
           <button
             onClick={handleToggle}
             disabled={toggling}
-            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
             aria-label={source.status === 'active' ? 'Pausar' : 'Ativar'}
           >
             {source.status === 'active' ? (
@@ -117,7 +117,7 @@ export function SourceCard({ source, onRemove }: SourceCardProps) {
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
             aria-label="Excluir fonte"
           >
             <Trash2 className="w-4 h-4" />

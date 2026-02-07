@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { Search, Filter, Calendar, X } from 'lucide-react';
+import { Search, Filter, Calendar, X, Layers } from 'lucide-react';
 import { Tabs } from '@/components/ui/Tabs';
 import { PostCard } from '@/components/queue/PostCard';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { usePersona } from '@/lib/contexts/PersonaContext';
 import { useRealtimePosts } from '@/lib/supabase/realtime';
 import { createClient } from '@/lib/supabase/client';
@@ -176,7 +177,8 @@ export function PostList({ initialPosts, onRefetchReady }: PostListProps) {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label="Limpar busca"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 rounded"
             >
               <X className="w-4 h-4" />
             </button>
@@ -186,7 +188,9 @@ export function PostList({ initialPosts, onRefetchReady }: PostListProps) {
         {/* Filter Toggle Button */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+          aria-label="Alternar filtros"
+          aria-expanded={showFilters}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
             showFilters || hasActiveFilters
               ? 'bg-slate-900 text-white border-slate-900'
               : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
@@ -273,22 +277,24 @@ export function PostList({ initialPosts, onRefetchReady }: PostListProps) {
               setPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
             }} />
           ))
-        ) : (
+        ) : hasActiveFilters ? (
           <div className="text-center py-16 text-slate-400">
             <p className="text-sm font-medium">
-              {hasActiveFilters
-                ? 'Nenhum post encontrado com esses filtros'
-                : 'Nenhum post nesta categoria'}
+              Nenhum post encontrado com esses filtros
             </p>
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="mt-2 text-sm text-sky-500 hover:text-sky-600 font-medium"
-              >
-                Limpar filtros
-              </button>
-            )}
+            <button
+              onClick={clearFilters}
+              className="mt-2 text-sm text-sky-500 hover:text-sky-600 font-medium"
+            >
+              Limpar filtros
+            </button>
           </div>
+        ) : (
+          <EmptyState
+            icon={<Layers className="w-8 h-8" />}
+            title="Nenhum post na fila"
+            description="Comece gerando conteúdo com IA ou crie um post manualmente."
+          />
         )}
       </div>
     </div>

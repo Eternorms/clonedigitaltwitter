@@ -17,7 +17,7 @@ export function Tabs({ tabs, activeTab, onTabChange }: TabsProps) {
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
           className={cn(
-            'px-4 py-2 text-sm font-bold transition-colors',
+            'px-4 py-2 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 rounded-lg',
             activeTab === tab.id
               ? 'text-slate-900 border-b-2 border-slate-900'
               : 'text-slate-500 hover:text-slate-700'
