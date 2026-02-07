@@ -1,8 +1,8 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
-// A3: Use origin-aware CORS headers (same pattern as generate-post/publish-post)
+// Use origin-aware CORS headers (same pattern as generate-post/publish-post)
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? ''
   const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? ''
@@ -14,7 +14,7 @@ function getCorsHeaders(req: Request): Record<string, string> {
   }
 }
 
-// A4: SSRF protection — block private/internal addresses
+// SSRF protection — block private/internal addresses
 function isUrlSafe(url: string): boolean {
   let parsed: URL
   try {
@@ -45,6 +45,16 @@ function isUrlSafe(url: string): boolean {
   if (hostname === 'metadata.google.internal') return false
   if (hostname === '169.254.169.254') return false
   return true
+}
+
+/** Validate that a feed URL has proper format */
+function isValidFeedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 // Strip HTML tags and decode common entities
@@ -85,7 +95,28 @@ function hashContent(content: string): string {
   return hash.toString(16)
 }
 
-serve(async (req) => {
+/** Extract feed-level metadata (title, description) */
+function extractFeedMetadata(xml: string): { title: string; description: string } {
+  // Try RSS <channel> metadata
+  const channelMatch = xml.match(/<channel>([\s\S]*?)<item/)
+  if (channelMatch) {
+    return {
+      title: extractText(channelMatch[1], 'title'),
+      description: extractText(channelMatch[1], 'description'),
+    }
+  }
+  // Try Atom <feed> metadata
+  const feedMatch = xml.match(/<feed[^>]*>([\s\S]*?)<entry/)
+  if (feedMatch) {
+    return {
+      title: extractText(feedMatch[1], 'title'),
+      description: extractText(feedMatch[1], 'subtitle'),
+    }
+  }
+  return { title: '', description: '' }
+}
+
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') {
@@ -124,7 +155,7 @@ serve(async (req) => {
 
     const { rss_source_id } = await req.json()
 
-    // A5: Validate rss_source_id is a valid UUID
+    // Validate rss_source_id is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!rss_source_id || typeof rss_source_id !== 'string' || !uuidRegex.test(rss_source_id)) {
       return new Response(JSON.stringify({ error: 'Invalid rss_source_id' }), {
@@ -133,7 +164,7 @@ serve(async (req) => {
       })
     }
 
-    // A5: Fetch RSS source with ownership check via personas join
+    // Fetch RSS source with ownership check via personas join
     const { data: source, error: sourceError } = await supabase
       .from('rss_sources')
       .select('*, personas!inner(id, name, user_id)')
@@ -150,7 +181,20 @@ serve(async (req) => {
 
     const persona = source.personas as unknown as { id: string; name: string; user_id: string }
 
-    // Fetch existing posts for duplicate detection
+    // Validate feed URL format
+    if (!isValidFeedUrl(source.url)) {
+      await supabase
+        .from('rss_sources')
+        .update({ status: 'error', error_message: 'URL inválida. A URL deve começar com http:// ou https://' })
+        .eq('id', rss_source_id)
+
+      return new Response(JSON.stringify({ error: 'URL inválida. A URL deve começar com http:// ou https://' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Fetch existing posts for duplicate detection (by content hash and link URL)
     const { data: existingPosts } = await supabase
       .from('posts')
       .select('content')
@@ -163,7 +207,7 @@ serve(async (req) => {
       (existingPosts ?? []).map((p: { content: string }) => hashContent(p.content))
     )
 
-    // A4: SSRF protection — validate URL before fetching
+    // SSRF protection — validate URL before fetching
     if (!isUrlSafe(source.url)) {
       return new Response(JSON.stringify({ error: 'URL blocked: private or internal address' }), {
         status: 400,
@@ -212,6 +256,27 @@ serve(async (req) => {
 
     const feedXml = await feedResponse.text()
 
+    // Validate XML content — check for basic RSS/Atom structure
+    const isRss = feedXml.includes('<rss') || feedXml.includes('<channel')
+    const isAtom = feedXml.includes('<feed')
+    if (!isRss && !isAtom) {
+      await supabase
+        .from('rss_sources')
+        .update({
+          status: 'error',
+          error_message: 'Conteúdo inválido: a URL não retornou um feed RSS ou Atom válido.',
+        })
+        .eq('id', rss_source_id)
+
+      return new Response(JSON.stringify({ error: 'Conteúdo inválido: a URL não retornou um feed RSS ou Atom válido.' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Extract feed metadata
+    const feedMeta = extractFeedMetadata(feedXml)
+
     // Parse RSS items (title + description + link)
     const items: { title: string; description: string; link: string }[] = []
 
@@ -242,6 +307,24 @@ serve(async (req) => {
       }
     }
 
+    // Check for duplicate article URLs
+    const existingUrls = new Set<string>()
+    if (items.some(i => i.link)) {
+      const { data: existingUrlPosts } = await supabase
+        .from('posts')
+        .select('content')
+        .eq('persona_id', persona.id)
+        .eq('source', 'rss')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      // Extract URLs from existing post content for dedup
+      for (const p of existingUrlPosts ?? []) {
+        const urlMatch = (p as { content: string }).content.match(/https?:\/\/\S+/)
+        if (urlMatch) existingUrls.add(urlMatch[0])
+      }
+    }
+
     // Build posts and filter duplicates
     const postsToInsert: {
       persona_id: string
@@ -253,7 +336,12 @@ serve(async (req) => {
     }[] = []
 
     for (const item of items.slice(0, 10)) { // Process up to 10 items
-      // Build enriched content: title + description
+      // Check for duplicate URL
+      if (item.link && existingUrls.has(item.link)) {
+        continue
+      }
+
+      // Build enriched content: title + description (limited to 280 chars)
       let content = item.title
       if (item.description) {
         const descTruncated = item.description.length > 180
@@ -261,9 +349,9 @@ serve(async (req) => {
           : item.description
         content = `"${item.title}" — ${descTruncated}`
       }
-      // Ensure total content fits tweet limit
-      if (content.length > 270) {
-        content = content.slice(0, 267) + '...'
+      // Ensure total content fits tweet limit (280 chars)
+      if (content.length > 280) {
+        content = content.slice(0, 277) + '...'
       }
 
       // Check for duplicates using content hash
@@ -272,6 +360,7 @@ serve(async (req) => {
         continue // Skip duplicate
       }
       existingHashes.add(contentHash) // Prevent duplicates within same batch
+      if (item.link) existingUrls.add(item.link)
 
       postsToInsert.push({
         persona_id: persona.id,
@@ -310,7 +399,12 @@ serve(async (req) => {
       description: `${source.name} sincronizado (${postsToInsert.length} novos artigos)`,
     })
 
-    return new Response(JSON.stringify({ synced: postsToInsert.length }), {
+    return new Response(JSON.stringify({
+      synced: postsToInsert.length,
+      feed_title: feedMeta.title || undefined,
+      feed_description: feedMeta.description || undefined,
+      total_items_found: items.length,
+    }), {
       headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),
     })
   } catch (error) {

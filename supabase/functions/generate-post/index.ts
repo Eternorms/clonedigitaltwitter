@@ -1,6 +1,7 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
+import type { GeneratedPost } from '../_shared/types.ts'
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? ''
@@ -13,7 +14,73 @@ function getCorsHeaders(req: Request): Record<string, string> {
   }
 }
 
-serve(async (req) => {
+/** Call Gemini API with retry logic (max 2 retries, exponential backoff) */
+async function callGeminiWithRetry(
+  url: string,
+  body: object,
+  apiKey: string,
+  maxRetries = 2,
+): Promise<Response> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(body),
+      })
+      // Only retry on 5xx or 429 (rate limit)
+      if (response.ok || (response.status < 500 && response.status !== 429)) {
+        return response
+      }
+      lastError = new Error(`Gemini API returned ${response.status}`)
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
+    if (attempt < maxRetries) {
+      const delay = Math.pow(2, attempt) * 1000 // 1s, 2s
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError ?? new Error('Gemini API call failed after retries')
+}
+
+/** Extract JSON array from AI response text using multiple patterns */
+function extractJsonArray(text: string): GeneratedPost[] | null {
+  // Pattern 1: Match [...] directly
+  const directMatch = text.match(/\[[\s\S]*\]/)
+  if (directMatch) {
+    try {
+      return JSON.parse(directMatch[0])
+    } catch { /* try next pattern */ }
+  }
+
+  // Pattern 2: Extract from markdown code block ```json ... ```
+  const codeBlockMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/)
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1])
+    } catch { /* try next pattern */ }
+  }
+
+  // Pattern 3: Try parsing the entire response as JSON
+  try {
+    const parsed = JSON.parse(text)
+    if (Array.isArray(parsed)) return parsed
+  } catch { /* all patterns failed */ }
+
+  return null
+}
+
+/** Sanitize generated content: trim whitespace, collapse excessive newlines */
+function sanitizeContent(content: string): string {
+  return content
+    .trim()
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+$/gm, '')
+}
+
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -218,6 +285,18 @@ serve(async (req) => {
       // Google Trends context is optional — continue without it
     }
 
+    // --- Fetch existing content for duplicate detection ---
+    const { data: existingPosts } = await supabase
+      .from('posts')
+      .select('content')
+      .eq('persona_id', persona_id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    const existingContents = new Set(
+      (existingPosts ?? []).map((p: { content: string }) => p.content.toLowerCase().trim())
+    )
+
     const topics = (persona.topics as string[]) ?? []
     const prompt = `Gere ${count} posts para Twitter para a persona "${persona.name}" (${persona.handle}).
 Tom: ${persona.tone ?? 'informativo'}.
@@ -227,20 +306,25 @@ Idioma: Português-BR.
 Máximo 280 caracteres cada. Inclua hashtags relevantes.${rssContext}${trendsContext}
 ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados acima, adaptando ao tom e estilo da persona.\n' : ''}Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 1024,
-          },
-        }),
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+    const geminiBody = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 1024,
       },
-    )
+    }
+
+    let geminiResponse: Response
+    try {
+      geminiResponse = await callGeminiWithRetry(geminiUrl, geminiBody, geminiApiKey)
+    } catch (err) {
+      console.error('Gemini API error after retries:', err)
+      return new Response(JSON.stringify({ error: 'Gemini API error', details: 'Falha após múltiplas tentativas. Verifique a configuração da API.' }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text()
@@ -254,21 +338,11 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
     const geminiData = await geminiResponse.json()
     const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
 
-    // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
+    // Extract JSON from response using multiple patterns
+    const generatedPosts = extractJsonArray(responseText)
+    if (!generatedPosts) {
       return new Response(JSON.stringify({ error: 'Failed to parse Gemini response' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    let generatedPosts: { content: string; hashtags: string[] }[]
-    try {
-      generatedPosts = JSON.parse(jsonMatch[0])
-    } catch {
-      return new Response(JSON.stringify({ error: 'Failed to parse AI response as JSON' }), {
-        status: 422,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -280,13 +354,15 @@ ${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados aci
       })
     }
 
-    // Filter out posts exceeding 280 characters
-    const validPosts = generatedPosts.filter(
-      (p) => typeof p.content === 'string' && p.content.length > 0 && p.content.length <= 280
-    )
+    // Filter, sanitize, and deduplicate posts
+    const validPosts = generatedPosts
+      .filter((p) => typeof p.content === 'string' && p.content.length > 0)
+      .map((p) => ({ ...p, content: sanitizeContent(p.content) }))
+      .filter((p) => p.content.length <= 280)
+      .filter((p) => !existingContents.has(p.content.toLowerCase().trim()))
 
     if (validPosts.length === 0) {
-      return new Response(JSON.stringify({ error: 'All generated posts exceeded 280 characters' }), {
+      return new Response(JSON.stringify({ error: 'Nenhum post válido gerado (duplicados, vazios ou excedendo 280 caracteres)' }), {
         status: 422,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
