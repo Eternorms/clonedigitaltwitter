@@ -1,6 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -30,7 +29,13 @@ async function hmacSha1(key: string, data: string): Promise<string> {
     ['sign'],
   )
   const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data))
-  return base64Encode(new Uint8Array(signature))
+  // Use native btoa() instead of deno std base64Encode
+  const bytes = new Uint8Array(signature)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
 }
 
 // Generate OAuth 1.0a Authorization header
@@ -75,7 +80,34 @@ async function buildOAuthHeader(
   return `OAuth ${headerParts}`
 }
 
-serve(async (req) => {
+/** Parse Twitter API error response into a user-friendly message */
+function parseTwitterError(status: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body)
+    const detail = parsed.detail ?? parsed.errors?.[0]?.message ?? ''
+
+    if (status === 429) {
+      return 'Rate limit do Twitter excedido. Aguarde alguns minutos antes de tentar novamente.'
+    }
+    if (status === 403) {
+      if (detail.includes('duplicate')) {
+        return 'Conteúdo duplicado. O Twitter não permite publicar tweets idênticos.'
+      }
+      if (detail.includes('suspended')) {
+        return 'Conta do Twitter suspensa. Verifique o status da conta no Twitter.'
+      }
+      return `Acesso negado pelo Twitter: ${detail || 'verifique as permissões da conta.'}`
+    }
+    if (status === 401) {
+      return 'Credenciais do Twitter inválidas ou expiradas. Reconfigure as chaves da API.'
+    }
+    return detail || `Erro do Twitter (HTTP ${status})`
+  } catch {
+    return `Erro do Twitter (HTTP ${status}): ${body.slice(0, 200)}`
+  }
+}
+
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') {
@@ -146,6 +178,24 @@ serve(async (req) => {
       })
     }
 
+    // Validate tweet content length
+    if (post.content.length > 280) {
+      return new Response(JSON.stringify({
+        error: 'Conteúdo excede 280 caracteres',
+        details: `O post tem ${post.content.length} caracteres. Máximo permitido: 280.`,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!post.content.trim()) {
+      return new Response(JSON.stringify({ error: 'Conteúdo do post está vazio' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const persona = post.personas as unknown as { name: string; user_id: string }
 
     // Read Twitter OAuth 1.0a credentials from env vars
@@ -183,7 +233,9 @@ serve(async (req) => {
 
     if (!twitterResponse.ok) {
       const errorText = await twitterResponse.text()
-      return new Response(JSON.stringify({ error: 'Twitter API error', details: errorText }), {
+      const friendlyError = parseTwitterError(twitterResponse.status, errorText)
+      console.error('Twitter API error:', errorText)
+      return new Response(JSON.stringify({ error: friendlyError, details: errorText }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -191,6 +243,7 @@ serve(async (req) => {
 
     const twitterData = await twitterResponse.json()
     const tweetId = twitterData.data?.id
+    const tweetUrl = tweetId ? `https://twitter.com/i/status/${tweetId}` : null
 
     // Update post status
     const { error: updateError } = await supabase
@@ -221,7 +274,7 @@ serve(async (req) => {
       // Activity logging is non-critical
     }
 
-    return new Response(JSON.stringify({ tweet_id: tweetId }), {
+    return new Response(JSON.stringify({ tweet_id: tweetId, tweet_url: tweetUrl }), {
       headers: addRateLimitHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }, rateLimitResult),
     })
   } catch (error) {
