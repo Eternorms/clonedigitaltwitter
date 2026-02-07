@@ -41,6 +41,7 @@ export interface Persona {
   name: string;
   handle: string;
   emoji: string;
+  twitter_user_id?: string | null;
 }
 
 export interface User {

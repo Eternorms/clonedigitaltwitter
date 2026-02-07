@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Rss, TrendingUp, Loader2 } from 'lucide-react';
+import { Sparkles, Rss, TrendingUp, Loader2, Twitter, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { generateWithAI } from '@/lib/supabase/mutations';
+import { generateWithAI, fetchTweets } from '@/lib/supabase/mutations';
 import { usePersona } from '@/lib/contexts/PersonaContext';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { createClient } from '@/lib/supabase/client';
@@ -56,7 +56,13 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
   const [selectedSourceId, setSelectedSourceId] = useState<string>('');
   const [trends, setTrends] = useState<string[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
+  const [useTweetStyle, setUseTweetStyle] = useState(false);
+  const [tweetCount, setTweetCount] = useState(0);
+  const [fetchingTweets, setFetchingTweets] = useState(false);
   const { addToast } = useToast();
+
+  const selectedPersona = personas.find(p => p.id === personaId);
+  const hasTwitter = !!selectedPersona?.twitter_user_id;
 
   // Reset form when modal opens
   useEffect(() => {
@@ -104,6 +110,44 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
     }
   }, [open, trends.length]);
 
+  // Fetch tweet count when persona changes
+  useEffect(() => {
+    if (!personaId || !hasTwitter) { setTweetCount(0); return; }
+    const supabase = createClient();
+    supabase
+      .from('cached_tweets')
+      .select('id', { count: 'exact', head: true })
+      .eq('persona_id', personaId)
+      .then(({ count }) => setTweetCount(count ?? 0));
+  }, [personaId, hasTwitter]);
+
+  // Load toggle preference from localStorage
+  useEffect(() => {
+    if (personaId) {
+      const saved = localStorage.getItem(`tweet_style_${personaId}`);
+      setUseTweetStyle(saved === 'true');
+    }
+  }, [personaId]);
+
+  const handleToggleTweetStyle = () => {
+    const next = !useTweetStyle;
+    setUseTweetStyle(next);
+    localStorage.setItem(`tweet_style_${personaId}`, String(next));
+  };
+
+  const handleRefreshTweets = async () => {
+    setFetchingTweets(true);
+    try {
+      const result = await fetchTweets(personaId);
+      setTweetCount(result.total);
+      addToast(`${result.count} novos tweets carregados!`, 'success');
+    } catch {
+      addToast('Erro ao buscar tweets. Verifique a conexao Twitter.', 'error');
+    } finally {
+      setFetchingTweets(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!personaId) {
       addToast('Selecione uma persona.', 'error');
@@ -112,7 +156,7 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
 
     setLoading(true);
     try {
-      await generateWithAI(personaId, topic || undefined, count, selectedSourceId || undefined);
+      await generateWithAI(personaId, topic || undefined, count, selectedSourceId || undefined, useTweetStyle);
       addToast(`${count} posts gerados com sucesso!`, 'success');
       setTopic('');
       onGenerated();
@@ -178,6 +222,58 @@ export function GenerateAIModal({ open, onClose, onGenerated }: GenerateAIModalP
             <p className="text-xs text-slate-400 mt-1">
               Selecione uma fonte específica para inspirar os posts.
             </p>
+          </div>
+        )}
+
+        {/* Tweet Style Toggle */}
+        {personaId && (
+          <div className="p-3 bg-sky-50 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Twitter className="w-4 h-4 text-sky-500" />
+                <span className="text-sm font-medium text-sky-700">
+                  Basear no meu estilo de tweets
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={useTweetStyle}
+                onClick={handleToggleTweetStyle}
+                disabled={!hasTwitter}
+                className={`relative w-10 h-6 rounded-full transition-colors ${
+                  !hasTwitter ? 'bg-slate-100 cursor-not-allowed' :
+                  useTweetStyle ? 'bg-sky-500' : 'bg-slate-200'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  useTweetStyle ? 'left-5' : 'left-1'
+                }`} />
+              </button>
+            </div>
+
+            {hasTwitter ? (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-sky-600">
+                  {tweetCount > 0
+                    ? `${tweetCount} tweets cacheados`
+                    : 'Nenhum tweet -- clique para buscar'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRefreshTweets}
+                  disabled={fetchingTweets}
+                  className="text-xs font-bold text-sky-600 hover:text-sky-800 transition-colors flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${fetchingTweets ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Conecte o Twitter primeiro para usar esta funcao.
+              </p>
+            )}
           </div>
         )}
 

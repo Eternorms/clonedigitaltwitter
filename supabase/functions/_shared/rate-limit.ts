@@ -137,4 +137,6 @@ export const RATE_LIMITS = {
   syncRss: { maxRequests: 20, windowSeconds: 60 },
   // Telegram: 30 commands per minute per chat
   telegram: { maxRequests: 30, windowSeconds: 60 },
+  // Tweet fetching: 5 requests per hour per user
+  fetchTweets: { maxRequests: 5, windowSeconds: 3600 },
 }

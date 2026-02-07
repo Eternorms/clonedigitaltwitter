@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
 import { checkRateLimit, rateLimitResponse, addRateLimitHeaders, RATE_LIMITS } from '../_shared/rate-limit.ts'
+import { buildOAuthHeader } from '../_shared/twitter-auth.ts'
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? ''
@@ -11,73 +12,6 @@ function getCorsHeaders(req: Request): Record<string, string> {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Vary': 'Origin',
   }
-}
-
-// Percent-encode per RFC 3986
-function percentEncode(str: string): string {
-  return encodeURIComponent(str).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-}
-
-// HMAC-SHA1 using Web Crypto API
-async function hmacSha1(key: string, data: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(key),
-    { name: 'HMAC', hash: 'SHA-1' },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data))
-  // Use native btoa() instead of deno std base64Encode
-  const bytes = new Uint8Array(signature)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary)
-}
-
-// Generate OAuth 1.0a Authorization header
-async function buildOAuthHeader(
-  method: string,
-  url: string,
-  consumerKey: string,
-  consumerSecret: string,
-  accessToken: string,
-  accessTokenSecret: string,
-): Promise<string> {
-  const oauthParams: Record<string, string> = {
-    oauth_consumer_key: consumerKey,
-    oauth_nonce: crypto.randomUUID().replace(/-/g, ''),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: accessToken,
-    oauth_version: '1.0',
-  }
-
-  // Sort params and build param string
-  const sortedKeys = Object.keys(oauthParams).sort()
-  const paramString = sortedKeys
-    .map((k) => `${percentEncode(k)}=${percentEncode(oauthParams[k])}`)
-    .join('&')
-
-  // Create signature base string
-  const signatureBase = `${method.toUpperCase()}&${percentEncode(url)}&${percentEncode(paramString)}`
-
-  // Create signing key
-  const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(accessTokenSecret)}`
-
-  // Compute HMAC-SHA1 signature
-  oauthParams.oauth_signature = await hmacSha1(signingKey, signatureBase)
-
-  // Build header string
-  const headerParts = Object.keys(oauthParams)
-    .sort()
-    .map((k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
-    .join(', ')
-
-  return `OAuth ${headerParts}`
 }
 
 /** Parse Twitter API error response into a user-friendly message */

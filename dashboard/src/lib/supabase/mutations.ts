@@ -103,13 +103,22 @@ export async function updateProfile(data: { name?: string; preferred_model?: str
   return supabase.from('profiles').update(data).eq('id', user.id)
 }
 
-export async function generateWithAI(personaId: string, topic?: string, count: number = 3, rssSourceId?: string) {
+export async function generateWithAI(personaId: string, topic?: string, count: number = 3, rssSourceId?: string, useTweetStyle: boolean = false) {
   const supabase = createClient()
   const { data, error } = await supabase.functions.invoke('generate-post', {
-    body: { persona_id: personaId, topic, count, rss_source_id: rssSourceId },
+    body: { persona_id: personaId, topic, count, rss_source_id: rssSourceId, use_tweet_style: useTweetStyle },
   })
   if (error) throw error
   return data
+}
+
+export async function fetchTweets(personaId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('fetch-tweets', {
+    body: { persona_id: personaId },
+  })
+  if (error) throw error
+  return data as { count: number; total: number }
 }
 
 export async function publishToTwitter(postId: string) {

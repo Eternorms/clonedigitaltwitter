@@ -44,6 +44,28 @@ export interface GeneratedPost {
   hashtags: string[]
 }
 
+/** Cached tweet row from cached_tweets table */
+export interface CachedTweet {
+  id: string
+  persona_id: string
+  tweet_id: string
+  text: string
+  tweeted_at: string
+  like_count: number
+  retweet_count: number
+}
+
+/** Request body for fetch-tweets Edge Function */
+export interface FetchTweetsRequest {
+  persona_id: string
+}
+
+/** Response from fetch-tweets Edge Function */
+export interface FetchTweetsResponse {
+  count: number
+  total: number
+}
+
 /** Activity log entry */
 export interface Activity {
   user_id: string

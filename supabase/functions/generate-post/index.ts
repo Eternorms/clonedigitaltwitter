@@ -117,7 +117,10 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { persona_id, topic, model: requestedModel, rss_source_id } = body
+    const { persona_id, topic, model: requestedModel, rss_source_id, use_tweet_style } = body
+
+    // Default use_tweet_style to false (backward compatible)
+    const useTweetStyle = use_tweet_style === true
 
     // Validate persona_id is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -204,6 +207,66 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // --- Fetch tweet context: real tweets from persona's timeline ---
+    let tweetContext = ''
+    try {
+      if (useTweetStyle) {
+        // Top 5 by engagement
+        const { data: topTweets } = await supabase
+          .from('cached_tweets')
+          .select('text, like_count, retweet_count')
+          .eq('persona_id', persona_id)
+          .order('like_count', { ascending: false })
+          .limit(5)
+
+        // 5 most recent
+        const { data: recentTweets } = await supabase
+          .from('cached_tweets')
+          .select('text, like_count, retweet_count')
+          .eq('persona_id', persona_id)
+          .order('tweeted_at', { ascending: false })
+          .limit(5)
+
+        // Deduplicate (a tweet can be both top and recent)
+        const seen = new Set<string>()
+        const allTweets: { text: string; like_count: number; retweet_count: number; section: string }[] = []
+
+        for (const t of (topTweets ?? [])) {
+          if (!seen.has(t.text)) {
+            seen.add(t.text)
+            allTweets.push({ ...t, section: 'top' })
+          }
+        }
+        for (const t of (recentTweets ?? [])) {
+          if (!seen.has(t.text)) {
+            seen.add(t.text)
+            allTweets.push({ ...t, section: 'recent' })
+          }
+        }
+
+        if (allTweets.length > 0) {
+          const topList = allTweets.filter(t => t.section === 'top')
+          const recentList = allTweets.filter(t => t.section === 'recent')
+          let idx = 1
+          let context = '\n\n=== EXEMPLOS REAIS (tweets mais populares) ==='
+          for (const t of topList) {
+            context += `\n${idx}. "${t.text}" (${t.like_count} likes, ${t.retweet_count} RTs)`
+            idx++
+          }
+          if (recentList.length > 0) {
+            context += '\n\n=== EXEMPLOS RECENTES ==='
+            for (const t of recentList) {
+              context += `\n${idx}. "${t.text}" (${t.like_count} likes, ${t.retweet_count} RTs)`
+              idx++
+            }
+          }
+          tweetContext = context
+        }
+      }
+    } catch {
+      // Tweet context is optional — continue without it
     }
 
     // --- Fetch RSS context: recent RSS-sourced posts for this persona ---
@@ -298,20 +361,23 @@ Deno.serve(async (req) => {
     )
 
     const topics = (persona.topics as string[]) ?? []
+    const tweetStyleInstruction = tweetContext
+      ? '\n\nIMPORTANTE: Imite o estilo, vocabulario e padroes de escrita dos tweets acima.\nMantenha o mesmo nivel de formalidade, uso de emojis, e estrutura de frase.\nCrie posts ORIGINAIS que parecem ter sido escritos pela mesma pessoa.\n'
+      : ''
     const prompt = `Gere ${count} posts para Twitter para a persona "${persona.name}" (${persona.handle}).
 Tom: ${persona.tone ?? 'informativo'}.
 Tópicos da persona: ${topics.join(', ')}.
 Foco no tópico: ${topic ?? topics[0] ?? 'geral'}.
 Idioma: Português-BR.
-Máximo 280 caracteres cada. Inclua hashtags relevantes.${rssContext}${trendsContext}
-${rssContext || trendsContext ? '\nCrie posts originais inspirados nos dados acima, adaptando ao tom e estilo da persona.\n' : ''}Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
+Máximo 280 caracteres cada. Inclua hashtags relevantes.${tweetContext}${rssContext}${trendsContext}${tweetStyleInstruction}
+${!tweetContext && (rssContext || trendsContext) ? '\nCrie posts originais inspirados nos dados acima, adaptando ao tom e estilo da persona.\n' : ''}Retorne APENAS um JSON array: [{ "content": "...", "hashtags": ["..."] }]`
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
     const geminiBody = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.8,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 1536,
       },
     }
 

@@ -35,7 +35,7 @@ export async function getPersonas(): Promise<Persona[]> {
   const supabase = createClient()
   const { data } = await supabase
     .from('personas')
-    .select('id, name, handle, emoji')
+    .select('id, name, handle, emoji, twitter_user_id')
     .eq('is_active', true)
     .order('created_at')
 
