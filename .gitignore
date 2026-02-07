@@ -29,6 +29,7 @@ desktop.ini
 # Logs
 *.log
 logs/
+npm-debug.log*
 
 # Testing
 .coverage
@@ -38,3 +39,4 @@ coverage/
 # Build
 .vercel/
 .wrangler/
+.turbo/

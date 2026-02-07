@@ -1,82 +1,128 @@
 # Contexto Atual do Projeto
 
 ## Status Geral
-- **Fase atual:** Migracao para Supabase + Cloudflare Pages concluida
-- **Ultima atualizacao:** 2026-02-02
-- **Proxima tarefa:** Configurar projeto Supabase, rodar migrations, testar auth flow
+- **Fase atual:** Polimento (UI, Edge Functions, testes, infra/docs)
+- **Ultima atualizacao:** 2026-02-06
+- **Proxima tarefa:** Configurar projeto Supabase com chaves reais, deploy em producao
 
 ## Arquitetura
 
 ```
-Cloudflare Pages          Supabase
-+-----------------+      +--------------------------+
-| Next.js 14      |      | Auth (email/password)    |
-| @supabase/ssr   |----->| PostgreSQL (Database)    |
-| Tailwind CSS    |      | Storage (post-images)    |
-+-----------------+      | Edge Functions (Deno):   |
-                         |  - generate-post (Claude)|
-                         |  - publish-post (Twitter)|
-                         |  - sync-rss             |
-                         |  - telegram-webhook     |
-                         | pg_cron (agendamento)   |
-                         | RLS (autorizacao)       |
-                         | Realtime               |
-                         +--------------------------+
+Cloudflare Pages                    Supabase
++----------------------------+      +------------------------------------+
+|                            |      |                                    |
+|  Next.js 14 (App Router)   |      |  Auth (email/password)             |
+|  TypeScript                |      |  PostgreSQL (5 tabelas + RLS)      |
+|  Tailwind CSS v3           | ---> |  Storage (post-images)             |
+|  @supabase/ssr             |      |  Edge Functions (Deno):            |
+|  SWR (data fetching)       |      |    - generate-post (Gemini AI)     |
+|  Design System "Clean      |      |    - publish-post (Twitter API)    |
+|    Studio"                 |      |    - sync-rss (RSS feeds)          |
++----------------------------+      |    - telegram-webhook (notif.)     |
+                                    |  pg_cron (agendamento)             |
+                                    |  Realtime (subscriptions)          |
+                                    |                                    |
+                                    +------------------------------------+
 ```
 
 ## O que esta funcionando
-- [x] Supabase SQL migrations (5 tabelas + storage + pg_cron)
-- [x] Row Level Security em todas as tabelas
+
+### Frontend
 - [x] Supabase Auth integrado no Next.js (server + client + middleware)
 - [x] Paginas de login e registro
 - [x] Dashboard completo com 7 paginas conectadas ao Supabase
-- [x] Componentes UI (Avatar, Badge, Button, Card, StatCard, Tabs)
-- [x] 4 Edge Functions (generate-post, publish-post, sync-rss, telegram-webhook)
-- [x] Cloudflare Pages configurado (wrangler.toml, build scripts)
+- [x] Componentes UI (Avatar, Badge, Button, Card, StatCard, Tabs, Modal, Toast)
 - [x] PersonaContext para gerenciamento de persona ativa
+- [x] ToastContext para notificacoes
 - [x] Mutations para aprovar/rejeitar/agendar posts
+- [x] Realtime subscriptions para atualizacoes em tempo real
+- [x] Design System "Clean Studio" (Manrope, cores semanticas, glassmorphism sutil)
+- [x] Responsividade e loading states
+- [x] Cloudflare Pages configurado (wrangler.toml, build scripts)
 
-## O que falta
-- [ ] Criar projeto no Supabase Dashboard e configurar .env.local com chaves reais
+### Backend (Supabase)
+- [x] 10 SQL migrations (5 tabelas + storage + pg_cron + model selection)
+- [x] Row Level Security em todas as tabelas
+- [x] PostgreSQL enums nativos (post_status, post_source, source_status, activity_type)
+- [x] 4 Edge Functions com rate limiting compartilhado
+
+### Edge Functions (detalhes)
+
+| Funcao | Descricao | Rate Limit | Melhorias |
+|--------|-----------|------------|-----------|
+| `generate-post` | Gera conteudo com Gemini AI (4 modelos) | 10 req/min | Selecao de modelo, trending topics context |
+| `publish-post` | Publica no Twitter via OAuth 1.0a | 30 tweets/15min | Retry logic, error handling melhorado |
+| `sync-rss` | Busca e processa feeds RSS | 20 syncs/min | Filtros de conteudo, deduplicacao |
+| `telegram-webhook` | Notificacoes via Telegram Bot | - | Comandos interativos |
+
+Rate limiting compartilhado via `supabase/functions/_shared/rate-limit.ts`.
+
+### Infraestrutura
+- [x] GitHub Actions CI (lint + build)
+- [x] GitHub Actions Deploy (Cloudflare Pages + Edge Functions)
+- [x] `.env.example` para onboarding
+- [x] Documentacao atualizada (README, DEPLOYMENT, CONTEXT)
+
+## O que falta (deploy)
+- [ ] Criar projeto no Supabase Dashboard e configurar `.env.local` com chaves reais
 - [ ] Rodar migrations: `supabase db push`
-- [ ] Habilitar pg_cron na Dashboard do Supabase
-- [ ] Configurar secrets das Edge Functions
-- [ ] Deploy no Cloudflare Pages (`npm run pages:deploy`)
-- [ ] Conectar Twitter Developer App
-- [ ] Configurar Telegram Bot webhook
-- [ ] Testes end-to-end
+- [ ] Habilitar pg_cron e agendar `check_scheduled_posts()`
+- [ ] Configurar secrets das Edge Functions (Gemini, Twitter, Telegram)
+- [ ] Deploy no Cloudflare Pages
+- [ ] Conectar Twitter Developer App (OAuth 1.0a)
+- [ ] Configurar Telegram Bot webhook (opcional)
+- [ ] Testes end-to-end com credenciais reais
 
-## Decisoes tomadas
-1. **2026-01-30** - Stack original: FastAPI + Next.js 14
-2. **2026-02-02** - Migracao para Supabase (backend completo) + Cloudflare Pages (frontend)
-3. **2026-02-02** - Supabase Auth substitui JWT customizado
-4. **2026-02-02** - Edge Functions (Deno) substituem FastAPI/Celery
-5. **2026-02-02** - pg_cron substitui Celery periodic tasks
-6. **2026-02-02** - RLS substitui autorizacao no backend
-7. **2026-02-02** - PostgreSQL enums nativos para status/source/type
+## Decisoes Tomadas
+
+| Data | Decisao |
+|------|---------|
+| 2026-01-30 | Stack original: FastAPI + Next.js 14 |
+| 2026-02-02 | Migracao para Supabase (backend completo) + Cloudflare Pages (frontend) |
+| 2026-02-02 | Supabase Auth substitui JWT customizado |
+| 2026-02-02 | Edge Functions (Deno) substituem FastAPI/Celery |
+| 2026-02-02 | pg_cron substitui Celery periodic tasks |
+| 2026-02-02 | RLS substitui autorizacao no backend |
+| 2026-02-02 | PostgreSQL enums nativos para status/source/type |
+| 2026-02-06 | Design System "Clean Studio" formalizado (Manrope, cores semanticas) |
+| 2026-02-06 | GitHub Actions para CI/CD (lint, build, deploy) |
+| 2026-02-06 | Gemini AI como provedor de IA (4 modelos disponiveis) |
 
 ## Tabelas (Supabase)
-- **profiles** - Dados do usuario (vinculado a auth.users)
-- **personas** - Identidades digitais do usuario
-- **posts** - Posts com status, source, metricas
-- **activities** - Log de atividades
-- **rss_sources** - Fontes RSS configuradas
+
+| Tabela | Descricao |
+|--------|-----------|
+| `profiles` | Dados do usuario (vinculado a auth.users via trigger) |
+| `personas` | Identidades digitais do usuario (nome, handle, emoji, tom, topicos) |
+| `posts` | Posts com status enum, source, metricas de engajamento |
+| `activities` | Log de atividades do usuario |
+| `rss_sources` | Fontes RSS configuradas com status de sincronizacao |
 
 ## Estrutura do Projeto
+
 ```
-CLoneDigitalTwitter/
-├── supabase/
-│   ├── config.toml
-│   ├── migrations/ (8 arquivos SQL)
-│   └── functions/ (4 Edge Functions)
-├── dashboard/
+clone-digital-twitter/
+├── dashboard/                    # Frontend Next.js
 │   ├── src/
-│   │   ├── app/ (auth + dashboard pages)
-│   │   ├── components/ (ui, layout, dashboard, queue, persona)
-│   │   ├── lib/ (supabase clients, queries, mutations, contexts)
-│   │   └── types/
-│   ├── wrangler.toml
-│   └── package.json
-├── docs/
-└── design/
+│   │   ├── app/
+│   │   │   ├── (auth)/           # Login, Registro, Callback
+│   │   │   ├── (dashboard)/      # Dashboard, Queue, Sources, Analytics, Settings, Persona
+│   │   │   └── api/              # API routes
+│   │   ├── components/           # ui/, layout/, dashboard/, queue/, persona/, sources/
+│   │   ├── lib/                  # supabase/, contexts/
+│   │   └── types/                # TypeScript types
+│   ├── tests/                    # Testes unitarios e de componentes
+│   ├── .env.example              # Template de variaveis
+│   ├── tailwind.config.ts        # Design system tokens
+│   └── wrangler.toml             # Cloudflare Pages config
+├── supabase/
+│   ├── config.toml               # Configuracao local
+│   ├── migrations/               # 10 SQL migrations
+│   └── functions/                # 4 Edge Functions + _shared/
+├── .github/workflows/            # CI/CD (ci.yml, deploy.yml)
+├── docs/CONTEXT.md               # Este arquivo
+├── design/                       # Assets e exports do Figma
+├── DEPLOYMENT.md                 # Guia completo de deploy
+├── README.md                     # Documentacao principal
+└── CLAUDE.md                     # Instrucoes para Claude Code
 ```
