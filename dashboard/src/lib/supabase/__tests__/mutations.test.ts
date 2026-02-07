@@ -18,6 +18,7 @@ import {
   toggleRSSSource,
   updatePersona,
   generateWithAI,
+  fetchTweets,
   publishToTwitter,
   syncRSSSource,
 } from '../mutations'
@@ -188,6 +189,63 @@ describe('mutations', () => {
       expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
         body: { persona_id: 'persona-1', topic: undefined, count: 3, rss_source_id: undefined, use_tweet_style: false },
       })
+    })
+
+    it('passes use_tweet_style when enabled', async () => {
+      await generateWithAI('persona-1', 'topic', 3, undefined, true)
+      expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
+        body: { persona_id: 'persona-1', topic: 'topic', count: 3, rss_source_id: undefined, use_tweet_style: true },
+      })
+    })
+
+    it('passes both rss_source_id and use_tweet_style together', async () => {
+      await generateWithAI('persona-1', 'topic', 5, 'rss-1', true)
+      expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
+        body: { persona_id: 'persona-1', topic: 'topic', count: 5, rss_source_id: 'rss-1', use_tweet_style: true },
+      })
+    })
+
+    it('defaults use_tweet_style to false', async () => {
+      await generateWithAI('persona-1', 'topic', 3, 'rss-1')
+      expect(mockFunctions.invoke).toHaveBeenCalledWith('generate-post', {
+        body: { persona_id: 'persona-1', topic: 'topic', count: 3, rss_source_id: 'rss-1', use_tweet_style: false },
+      })
+    })
+  })
+
+  describe('fetchTweets', () => {
+    it('invokes fetch-tweets edge function', async () => {
+      mockFunctions.invoke.mockResolvedValueOnce({
+        data: { count: 10, total: 50 },
+        error: null,
+      })
+
+      const result = await fetchTweets('persona-1')
+
+      expect(mockFunctions.invoke).toHaveBeenCalledWith('fetch-tweets', {
+        body: { persona_id: 'persona-1' },
+      })
+      expect(result).toEqual({ count: 10, total: 50 })
+    })
+
+    it('throws on error', async () => {
+      mockFunctions.invoke.mockResolvedValueOnce({
+        data: null,
+        error: new Error('Fetch failed'),
+      })
+
+      await expect(fetchTweets('persona-1')).rejects.toThrow('Fetch failed')
+    })
+
+    it('returns typed count and total', async () => {
+      mockFunctions.invoke.mockResolvedValueOnce({
+        data: { count: 0, total: 100 },
+        error: null,
+      })
+
+      const result = await fetchTweets('persona-1')
+      expect(result.count).toBe(0)
+      expect(result.total).toBe(100)
     })
   })
 
