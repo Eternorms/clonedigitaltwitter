@@ -28,7 +28,7 @@ Cloudflare Pages              Supabase
 
 **Two directories:**
 - **`dashboard/`** — Next.js 14 App Router, TypeScript, Tailwind CSS v3, `@supabase/ssr`
-- **`supabase/`** — 9 SQL migrations, 4 Edge Functions (Deno/TypeScript), shared rate-limit util
+- **`supabase/`** — 11 SQL migrations, 5 Edge Functions (Deno/TypeScript), shared rate-limit + twitter-auth utils
 
 The Python backend (`api/`) and Docker infra (`infra/`) were removed in the Supabase migration.
 
@@ -76,10 +76,11 @@ Components organized by domain: `ui/` (Button, Card, Modal, Badge, Toast, etc.),
 ## Database Tables (Supabase)
 
 - **profiles** — User data (linked to `auth.users` via trigger)
-- **personas** — Digital identities per user (name, handle, emoji, description, tone, topics)
+- **personas** — Digital identities per user (name, handle, emoji, description, tone, topics, last_tweet_fetch_at)
 - **posts** — Posts with status enum (`pending`/`approved`/`rejected`/`scheduled`/`published`), source, metrics
 - **activities** — Activity log
 - **rss_sources** — Configured RSS feeds with sync status
+- **cached_tweets** — Cached tweets from Twitter API v2 per persona (tweet_id, text, engagement metrics)
 
 All tables have RLS policies scoped to `auth.uid()`. PostgreSQL enums: `post_status`, `post_source`, `source_status`, `activity_type`.
 
@@ -87,12 +88,13 @@ All tables have RLS policies scoped to `auth.uid()`. PostgreSQL enums: `post_sta
 
 | Function | Purpose | Rate Limit |
 |----------|---------|------------|
-| `generate-post` | AI content generation via Gemini API | 10 req/min |
+| `generate-post` | AI content generation via Gemini API (with optional tweet style injection) | 10 req/min |
+| `fetch-tweets` | Fetch and cache tweets from Twitter API v2 (incremental via since_id) | 5 req/hour |
 | `publish-post` | Publish to Twitter via OAuth 1.0a | 30 tweets/15min |
 | `sync-rss` | Fetch and process RSS feeds | 20 syncs/min |
 | `telegram-webhook` | Telegram bot notifications | — |
 
-Rate limiting shared via `supabase/functions/_shared/rate-limit.ts`.
+Rate limiting shared via `supabase/functions/_shared/rate-limit.ts`. Twitter OAuth 1.0a shared via `supabase/functions/_shared/twitter-auth.ts`.
 
 ## AI Models
 

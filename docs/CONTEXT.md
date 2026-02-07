@@ -41,17 +41,19 @@ Cloudflare Pages                    Supabase
 - [x] Cloudflare Pages configurado (wrangler.toml, build scripts)
 
 ### Backend (Supabase)
-- [x] 10 SQL migrations (5 tabelas + storage + pg_cron + model selection)
+- [x] 11 SQL migrations (6 tabelas + storage + pg_cron + model selection + tweet cache)
 - [x] Row Level Security em todas as tabelas
 - [x] PostgreSQL enums nativos (post_status, post_source, source_status, activity_type)
-- [x] 4 Edge Functions com rate limiting compartilhado
+- [x] 5 Edge Functions com rate limiting compartilhado
+- [x] Tweet caching pipeline (Twitter API v2 → cached_tweets → prompt injection)
 
 ### Edge Functions (detalhes)
 
 | Funcao | Descricao | Rate Limit | Melhorias |
 |--------|-----------|------------|-----------|
-| `generate-post` | Gera conteudo com Gemini AI (4 modelos) | 10 req/min | Selecao de modelo, trending topics context |
-| `publish-post` | Publica no Twitter via OAuth 1.0a | 30 tweets/15min | Retry logic, error handling melhorado |
+| `generate-post` | Gera conteudo com Gemini AI (4 modelos) | 10 req/min | Selecao de modelo, trending topics context, tweet style injection |
+| `publish-post` | Publica no Twitter via OAuth 1.0a | 30 tweets/15min | Retry logic, error handling melhorado, shared OAuth module |
+| `fetch-tweets` | Busca e cacheia tweets do Twitter API v2 | 5 req/hora | Incremental via since_id, cleanup 500 max/persona |
 | `sync-rss` | Busca e processa feeds RSS | 20 syncs/min | Filtros de conteudo, deduplicacao |
 | `telegram-webhook` | Notificacoes via Telegram Bot | - | Comandos interativos |
 
@@ -87,16 +89,18 @@ Rate limiting compartilhado via `supabase/functions/_shared/rate-limit.ts`.
 | 2026-02-06 | Design System "Clean Studio" formalizado (Manrope, cores semanticas) |
 | 2026-02-06 | GitHub Actions para CI/CD (lint, build, deploy) |
 | 2026-02-06 | Gemini AI como provedor de IA (4 modelos disponiveis) |
+| 2026-02-07 | Tweet-based generation: cache de tweets reais + injecao no prompt (Fase 1) |
 
 ## Tabelas (Supabase)
 
 | Tabela | Descricao |
 |--------|-----------|
 | `profiles` | Dados do usuario (vinculado a auth.users via trigger) |
-| `personas` | Identidades digitais do usuario (nome, handle, emoji, tom, topicos) |
+| `personas` | Identidades digitais do usuario (nome, handle, emoji, tom, topicos, last_tweet_fetch_at) |
 | `posts` | Posts com status enum, source, metricas de engajamento |
 | `activities` | Log de atividades do usuario |
 | `rss_sources` | Fontes RSS configuradas com status de sincronizacao |
+| `cached_tweets` | Tweets cacheados do Twitter API v2 (por persona, com metricas de engajamento) |
 
 ## Estrutura do Projeto
 
@@ -117,8 +121,8 @@ clone-digital-twitter/
 │   └── wrangler.toml             # Cloudflare Pages config
 ├── supabase/
 │   ├── config.toml               # Configuracao local
-│   ├── migrations/               # 10 SQL migrations
-│   └── functions/                # 4 Edge Functions + _shared/
+│   ├── migrations/               # 11 SQL migrations
+│   └── functions/                # 5 Edge Functions + _shared/
 ├── .github/workflows/            # CI/CD (ci.yml, deploy.yml)
 ├── docs/CONTEXT.md               # Este arquivo
 ├── design/                       # Assets e exports do Figma
